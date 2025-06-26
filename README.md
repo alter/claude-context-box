@@ -16,7 +16,7 @@ A smart project context management system for Claude Code that automatically mai
 
 1. Download the installer:
 ```bash
-curl -O https://raw.githubusercontent.com/yourusername/claude-context-box/main/install-claude-context.py
+curl -O [https://raw.githubusercontent.com/yourusername/claude-context-box/main/install-claude-context.py](https://raw.githubusercontent.com/alter/claude-context-box/refs/heads/main/install-claude-context.py)
 ```
 
 2. Run the installer in your project root:
