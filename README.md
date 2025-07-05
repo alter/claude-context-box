@@ -1,28 +1,22 @@
-# Claude Context Box - Ultimate Hybrid Installer
+# Claude Context Box
 
-A comprehensive project context management system for Claude Code that combines the best of both worlds: advanced project analysis with Skylos dead code detection and robust context management with detailed development guidelines.
+A lightweight project context management system for Claude AI that helps maintain consistent coding standards and project structure awareness.
 
 ## 🚀 Features
 
 ### Core Features
-- **Hybrid Installation** - Smart merging of existing CLAUDE.md with new command structure
-- **Skylos Integration** - Automatic dead code analysis and cleanup
-- **Advanced Project Analysis** - Detects project type, chaos indicators, and organization patterns
-- **Intelligent Context Management** - Token-efficient project understanding (~200-400 tokens vs 50,000+)
-- **Command Mappings** - Single-letter commands for instant actions
+- **Smart Installation** - Preserves existing documentation when updating
+- **Conflict Detection** - Identifies naming conflicts and duplicate directories
+- **Python Environment Tracking** - Monitors virtual environment status and dependencies
+- **Dead Code Analysis** - Integrated Skylos tool for code cleanup
+- **Quick Commands** - Single-letter shortcuts for all common operations
 
-### Smart Analysis
-- **Project Type Detection** - Identifies new/empty, organized, legacy/chaotic, or existing Claude setups
-- **Conflict Detection** - Finds naming conflicts, duplicate directories, scattered scripts
-- **Python Environment Tracking** - Virtual environment status, dependencies, pip versions
-- **Multi-Language Support** - Python, Node.js, Ruby, Go, Rust, Java, PHP, Dart/Flutter
+### What It Does
+- **Creates .claude/ directory** - Contains all management scripts
+- **Generates CLAUDE.md** - Comprehensive rules and command mappings for Claude
+- **Maintains context files** - Auto-generated project structure and warnings
+- **Enforces standards** - No comments in code, English only, unified approach
 
-### Dead Code Cleanup
-- **Unused Imports** - Identifies and removes unnecessary imports
-- **Unused Functions** - Finds functions that are never called
-- **Unused Classes** - Detects orphaned class definitions
-- **Unused Variables** - Spots variables that are assigned but never used
-- **Confidence Levels** - 60%, 80%, or custom confidence thresholds
 
 ## 📦 Installation
 
@@ -32,30 +26,30 @@ A comprehensive project context management system for Claude Code that combines 
 curl -O https://raw.githubusercontent.com/alter/claude-context-box/main/install-claude-context.py
 
 # Run in your project directory
-python3 install-claude-context.py install
+python3 install-claude-context.py
 ```
 
-### Installation Options
-When you run the installer, you'll get three options:
+### What Happens During Installation
 
-1. **🔄 UPDATE** - Update existing installation (recommended)
-   - Preserves your existing CLAUDE.md content
-   - Adds new command mappings to the top
-   - Creates automatic backup
+- If CLAUDE.md doesn't exist: Creates fresh installation
+- If CLAUDE.md exists: Asks to update (preserves your documentation)
+- Always creates backup with timestamp
+- Updates all scripts to latest version
 
-2. **🆕 FRESH** - Complete fresh installation (with backup)
-   - Replaces CLAUDE.md with new structure
-   - Backs up original content
-   - Recommended for major updates
+### Files Created
 
-3. **❌ CANCEL** - Exit without changes
-
-### What Gets Created
-- `.claude/` directory with management scripts
-- `CLAUDE.md` with enhanced command structure
-- `.claude/context.json` - Project structure data
-- `.claude/format.md` - Human-readable context
-- `.claude/reports/` - Skylos analysis reports
+```
+your-project/
+├── CLAUDE.md                 # Rules and commands for Claude
+└── .claude/
+    ├── update.py            # Updates project context
+    ├── check.py             # Checks for conflicts
+    ├── setup.sh             # Sets up Python environment
+    ├── help.py              # Shows available commands
+    ├── cleancode.py         # Dead code analysis
+    ├── context.json         # Generated project structure
+    └── format.md            # Generated human-readable context
+```
 
 ## 🎯 Quick Start
 
@@ -126,31 +120,19 @@ The integrated Skylos scanner identifies:
 - **Medium (60-80%)** - Needs manual review
 - **Low (20-60%)** - Requires careful analysis
 
-## 🧹 Dead Code Cleanup Examples
+## 🧹 Dead Code Cleanup (Skylos)
 
-### Basic analysis:
+The system includes Skylos for finding unused code:
+
 ```bash
-python3 install-claude-context.py cleancode
-# Shows summary of dead code found
+# In Claude, just type:
+cc
+
+# Or run directly:
+python3 .claude/cleancode.py --interactive
 ```
 
-### Interactive cleanup:
-```bash
-python3 install-claude-context.py cleancode --interactive
-# Guides you through each item for removal
-```
-
-### Safe preview:
-```bash
-python3 install-claude-context.py cleancode --interactive --dry-run
-# Shows what would be removed without making changes
-```
-
-### High confidence only:
-```bash
-python3 install-claude-context.py cleancode --confidence 80
-# Only shows items with 80%+ confidence
-```
+Skylos will be installed automatically on first use.
 
 ## ⚠️ Conflict Prevention
 
