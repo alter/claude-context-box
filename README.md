@@ -29,7 +29,7 @@ A comprehensive project context management system for Claude Code that combines 
 ### Quick Start
 ```bash
 # Download the installer
-curl -O https://raw.githubusercontent.com/yourusername/claude-context-box/main/install-claude-context.py
+curl -O https://raw.githubusercontent.com/alter/claude-context-box/main/install-claude-context.py
 
 # Run in your project directory
 python3 install-claude-context.py install
