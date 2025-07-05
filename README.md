@@ -27,6 +27,9 @@ curl -O https://raw.githubusercontent.com/alter/claude-context-box/main/install-
 
 # Run in your project directory
 python3 install-claude-context.py
+
+# For non-interactive mode (auto-confirms updates)
+python3 install-claude-context.py -y
 ```
 
 ### What Happens During Installation

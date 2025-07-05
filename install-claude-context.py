@@ -9,6 +9,7 @@ import stat
 import json
 import shutil
 import subprocess
+import argparse
 from pathlib import Path
 from datetime import datetime
 
@@ -17,7 +18,7 @@ class ClaudeContextInstaller:
         self.root = Path.cwd()
         self.claude_dir = self.root / '.claude'
         
-    def install(self):
+    def install(self, auto_yes=False):
         """Main installation process"""
         print("🚀 Claude Context Box - Installation")
         print("=" * 50)
@@ -25,10 +26,17 @@ class ClaudeContextInstaller:
         # Check if already installed
         if (self.root / 'CLAUDE.md').exists():
             print("⚠️  CLAUDE.md already exists!")
-            response = input("Update existing installation? (y/n): ")
-            if response.lower() != 'y':
-                print("Installation cancelled.")
-                return
+            if not auto_yes:
+                try:
+                    response = input("Update existing installation? (y/n): ")
+                    if response.lower() != 'y':
+                        print("Installation cancelled.")
+                        return
+                except EOFError:
+                    print("\n❌ Non-interactive mode detected. Use -y flag to auto-confirm.")
+                    sys.exit(1)
+            else:
+                print("✅ Auto-updating existing installation...")
         
         print("📁 Creating directory structure...")
         self.create_directories()
@@ -1012,5 +1020,11 @@ reports/
             print(f"❌ Failed to run initial update: {e}")
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Claude Context Box Installer')
+    parser.add_argument('-y', '--yes', action='store_true',
+                       help='Auto-confirm updates (non-interactive mode)')
+    
+    args = parser.parse_args()
+    
     installer = ClaudeContextInstaller()
-    installer.install()
+    installer.install(auto_yes=args.yes)
