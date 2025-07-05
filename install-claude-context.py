@@ -359,30 +359,25 @@ class ProjectAnalyzer:
         return recs
         
     def _analyze_dead_code(self) -> Optional[Dict]:
-        """Analyze dead code using Skylos"""
-        print("🔍 Analyzing dead code with Skylos...")
+        """Check if Skylos is available for dead code analysis"""
+        print("🔍 Checking Skylos availability...")
         
         try:
             scanner = SkylosScanner(self.root)
-            analysis_data = scanner.run_skylos_analysis(confidence=60)
-            
-            if analysis_data:
-                # Count dead code items
-                imports = analysis_data.get('unused_imports', [])
-                functions = analysis_data.get('unused_functions', [])
-                classes = analysis_data.get('unused_classes', [])
-                variables = analysis_data.get('unused_variables', [])
-                
+            if scanner.check_skylos_installation():
+                print("✅ Skylos is installed and ready for dead code analysis")
                 return {
-                    'total_items': len(imports) + len(functions) + len(classes) + len(variables),
-                    'unused_imports': len(imports),
-                    'unused_functions': len(functions),
-                    'unused_classes': len(classes),
-                    'unused_variables': len(variables),
-                    'has_dead_code': len(imports) + len(functions) + len(classes) + len(variables) > 0
+                    'skylos_available': True,
+                    'message': 'Run `cleancode` or `cc` command to analyze dead code'
+                }
+            else:
+                print("📦 Skylos not installed. It will be installed when you run cleancode command")
+                return {
+                    'skylos_available': False,
+                    'message': 'Skylos will be installed automatically when needed'
                 }
         except Exception as e:
-            print(f"⚠️  Dead code analysis failed: {e}")
+            print(f"⚠️  Skylos check failed: {e}")
             return None
 
 # ===== ENHANCED INSTALLER (HYBRID OF BOTH VERSIONS) =====
@@ -399,8 +394,12 @@ class ClaudeContextHybridInstaller:
         """Check if CLAUDE.md exists"""
         return (self.root / 'CLAUDE.md').exists()
         
-    def ask_installation_type(self) -> str:
+    def ask_installation_type(self, mode: str = None) -> str:
         """Ask user what type of installation to perform"""
+        # If mode is provided, use it directly
+        if mode:
+            return mode
+            
         print("\n📋 CLAUDE.md already exists!")
         print("📄 Current content will be analyzed and preserved.")
         print("\nInstallation options:")
@@ -438,6 +437,9 @@ class ClaudeContextHybridInstaller:
         
         # Create CLAUDE.md with full instructions (FROM OLD VERSION)
         self.create_claude_md_full()
+        
+        # Create claude-context.py symlink or copy
+        self.create_claude_context_py()
         
         # Run initial update
         self.run_initial_update()
@@ -489,12 +491,101 @@ class ClaudeContextHybridInstaller:
         # Handle CLAUDE.md intelligently
         self._handle_existing_claude_md()
         
+        # Create claude-context.py symlink or copy
+        self.create_claude_context_py()
+        
         # Run update
         self.run_initial_update()
         
         print("\n✅ Update completed!")
         self._show_completion_message()
         
+    def _clean_existing_claude_md(self, content: str) -> str:
+        """Remove duplicate content from existing CLAUDE.md that will be in our header"""
+        # Keywords and patterns to look for and remove
+        patterns_to_remove = [
+            # Command sections
+            "QUICK COMMANDS", "Quick commands", "Command mappings",
+            "Project commands", "CRITICAL RULES", "Claude Context Box Rules",
+            # Specific rules
+            "Code style", "Python environment", "Directory structure",
+            "Code unification principle", "IMPORTANT UPDATE RULE",
+            "Automatic checks", "Context update workflow",
+            "Typical scenarios requiring update", "Python-specific rules",
+            # Command lines
+            "update` or `u`", "check` or `c`", "structure` or `s`",
+            "conflicts` or `cf`", "venv` or `v`", "help` or `h`",
+            "deps` or `d`", "cleancode` or `cc`",
+            # Specific instructions
+            "ALWAYS use `python3`", "NO COMMENTS in code",
+            "AVOID DUPLICATION", "EXTEND, DON'T DUPLICATE",
+            "python3 .claude/update.py", "python3 .claude/check.py",
+            "bash .claude/setup.sh", "Initial setup",
+            # Import directives
+            "@.claude/format.md", "@../CLAUDE.md",
+            # Project context headers
+            "Project Context Protocol", "Automatic project context",
+            # Installation and setup
+            "Creating venv if missing", "Installing dependencies",
+            "Adding new packages", "Create virtual environment",
+            "Activate venv"
+        ]
+        
+        lines = content.split('\n')
+        cleaned_lines = []
+        skip_section = False
+        section_depth = 0
+        
+        for i, line in enumerate(lines):
+            # Skip malformed/escaped lines
+            if '\\n' in line and '#' in line:
+                continue
+                
+            # Check if this line starts a section to skip
+            if any(pattern in line for pattern in patterns_to_remove):
+                # Determine section depth by counting # at start
+                if line.strip().startswith('#'):
+                    section_depth = len(line) - len(line.lstrip('#'))
+                skip_section = True
+                continue
+                
+            # If we're skipping a section, check if we've reached the end
+            if skip_section:
+                # Check if this is a new section at same or higher level
+                if line.strip().startswith('#'):
+                    current_depth = len(line) - len(line.lstrip('#'))
+                    if current_depth <= section_depth:
+                        skip_section = False
+                        # Check if this new section should also be skipped
+                        if not any(pattern in line for pattern in patterns_to_remove):
+                            cleaned_lines.append(line)
+                # Skip empty lines and content within skipped sections
+                continue
+            else:
+                # Keep this line
+                cleaned_lines.append(line)
+        
+        # Remove multiple consecutive empty lines
+        result = []
+        prev_empty = False
+        for line in cleaned_lines:
+            if line.strip() == "":
+                if not prev_empty:
+                    result.append(line)
+                prev_empty = True
+            else:
+                result.append(line)
+                prev_empty = False
+        
+        # Clean up the result
+        cleaned_content = '\\n'.join(result).strip()
+        
+        # If nothing meaningful left after cleaning, return empty
+        if len(cleaned_content) < 50:  # Less than 50 chars probably means we removed everything
+            return ""
+            
+        return cleaned_content
+    
     def _handle_existing_claude_md(self):
         """Simply merge existing CLAUDE.md with new command structure"""
         claude_md = self.root / 'CLAUDE.md'
@@ -503,342 +594,208 @@ class ClaudeContextHybridInstaller:
             self.create_claude_md_full()
             return
             
-        print("📄 Merging existing CLAUDE.md with new command structure...")
+        print("📄 Simplifying and merging existing CLAUDE.md...")
         existing_content = claude_md.read_text()
         
-        # Check if it already has the FULL command mappings (not just old partial ones)
-        has_full_rules = all([
-            'Code unification principle' in existing_content,
-            'AVOID DUPLICATION' in existing_content,
-            'Context update workflow' in existing_content,
-            'Python-specific rules' in existing_content
-        ])
-        
-        if has_full_rules:
-            print("✅ CLAUDE.md already has full command mappings")
-            return
-            
         # Create backup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") 
         backup_file = self.root / f'CLAUDE_backup_{timestamp}.md'
         backup_file.write_text(existing_content)
         print(f"💾 Backup created: {backup_file.name}")
         
+        # Clean existing content from duplicate sections
+        cleaned_content = self._clean_existing_claude_md(existing_content)
+        
         # Generate new header with command mappings
         new_header = self._generate_command_header()
         
-        # Simple merge: new header + separator + existing content
-        merged_content = f"""{new_header}
+        # Simple merge: new header + separator + cleaned existing content
+        if cleaned_content.strip():
+            merged_content = f"""{new_header}
 
 ---
 
-# Original Project Documentation
+# Project Documentation
 
-{existing_content}
+{cleaned_content}
 """
+        else:
+            # If nothing left after cleaning, just use the header
+            merged_content = new_header
         
         claude_md.write_text(merged_content)
-        print("✅ CLAUDE.md merged with command mappings")
+        print("✅ CLAUDE.md updated with simplified merge")
     
     def _generate_command_header(self) -> str:
         """Generate the command header section for CLAUDE.md"""
-        return """## ===== Claude Context Box Rules =====
-
-## Automatic project context
-@.claude/format.md
-
-## 💡 QUICK COMMANDS
-Just type these commands and I'll execute them:
-- `update` or `u` - Update project context
-- `check` or `c` - Quick conflict check
-- `structure` or `s` - Show full project structure
-- `conflicts` or `cf` - Show only conflicts
-- `venv` or `v` - Setup/check Python environment
-- `help` or `h` - Show all commands
-- `deps` or `d` - Show dependencies
-
-## ⚠️ CRITICAL RULES
-
-### Code style
-- **NO COMMENTS** in code files
-- **Use ENGLISH ONLY** for all code, variables, functions, and documentation
-- Self-documenting code with clear naming
-
-### Python environment
-- ALWAYS use `python3` instead of `python`
-- ALWAYS use `pip3` instead of `pip`
-- ALWAYS work in virtual environment `venv`
-- Activate venv: `source venv/bin/activate` (Linux/Mac) or `venv\\Scripts\\activate` (Windows)
-
-### Directory structure
-- ALWAYS check existing directories before creating new ones
-- Use `python3 .claude/update.py` to update context
-- DO NOT create new config*/test*/src* directories without checking
-
-### Code unification principle
-- **AVOID DUPLICATION**: Before creating new functionality, check existing code
-- **EXTEND, DON'T DUPLICATE**: Build on existing solutions rather than creating parallel implementations
-- **UNIFIED APPROACH**: If similar functionality exists, refactor to create a single, flexible solution
-- Examples:
-  - Don't create `user_validator.py` if `validators.py` exists - extend it
-  - Don't create `config2/` if `config/` exists - reorganize existing
-  - Don't create `new_utils.py` if `utils.py` exists - add to existing
-
-### ⚠️ IMPORTANT UPDATE RULE
-If I make structural changes (create/delete directories, add new modules),
-you MUST suggest running:
-```bash
-python3 .claude/update.py
-```
-
-### Automatic checks
-- **Before creating new directories** → first run: `python3 .claude/update.py`
-- **Before creating similar functionality** → check existing code structure
-- **After refactoring structure** → must run: `python3 .claude/update.py`
-- **When unsure about structure** → update context before continuing
-
-### Context update workflow
-1. Ensure venv is activated
-2. Run: `python3 .claude/update.py`
-3. Check updated context: `cat .claude/format.md`
-4. Continue work with current context
-
-## Typical scenarios requiring update
-
-### 1. Creating new functionality
-```bash
-# FIRST update context
-python3 .claude/update.py
-# THEN create files/folders
-```
-
-### 2. Structure refactoring
-```bash
-# Before refactoring - check current structure
-python3 .claude/update.py
-# After refactoring - update context
-python3 .claude/update.py
-```
-
-### 3. Resolving conflicts
-If I say something like:
-- "put in configs" (but config exists)
-- "create tests" (but test exists)
-- "add to src" (but source exists)
-
-YOU MUST:
-1. Stop
-2. Suggest running `python3 .claude/update.py`
-3. Show existing directories from context
-4. Ask which one to use
-
-## Python-specific rules
-
-### Installing dependencies
-```bash
-# ALWAYS in venv
-source venv/bin/activate  # or venv\\Scripts\\activate on Windows
-pip3 install -r requirements.txt
-```
-
-### Creating venv if missing
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip3 install --upgrade pip
-```
-
-### Adding new packages
-```bash
-# In activated venv
-pip3 install package_name
-pip3 freeze > requirements.txt
-python3 .claude/update.py  # Update context!
-```
-
-## 🔧 SKYLOS INTEGRATION (Dead Code Cleanup)
-```bash
-# Interactive cleanup - shows what will be removed and asks for confirmation
-python3 claude-context.py cleancode --interactive
-
-# Preview changes only (dry run)
-python3 claude-context.py cleancode --dry-run
-
-# High confidence only (80%+ confidence)
-python3 claude-context.py cleancode --confidence 80
-
-# Auto-install if missing
-python3 claude-context.py cleancode  # Will install Skylos if needed
-```
-
-### Command mappings:
-When I type `update` or `u`, you MUST run: `python3 .claude/update.py`
-When I type `check` or `c`, you MUST run: `python3 .claude/check.py`
-When I type `structure` or `s`, you MUST run: `cat .claude/context.json | python3 -m json.tool`
-When I type `conflicts` or `cf`, you MUST run: `cat .claude/format.md | grep -A20 "WARNINGS"`
-When I type `venv` or `v`, you MUST run: `bash .claude/setup.sh`
-When I type `help` or `h`, you MUST show: the command list from CLAUDE.md
-When I type `deps` or `d`, you MUST run: `cat .claude/format.md | grep -A10 "Dependencies"`
-When I type `cleancode` or `cc`, you MUST run: `python3 claude-context.py cleancode --interactive`
-
-## Initial setup (if not done yet)
-```bash
-# 1. Create virtual environment
-python3 -m venv venv
-
-# 2. Activate venv
-source venv/bin/activate  # Linux/Mac
-# or
-venv\\Scripts\\activate     # Windows
-
-# 3. Update context
-python3 .claude/update.py
-```"""
+        # Check if parent CLAUDE.md exists
+        parent_claude = self.root.parent / 'CLAUDE.md'
+        has_parent = parent_claude.exists()
+        
+        lines = ["# Project Context Protocol", ""]
+        
+        if has_parent:
+            lines.extend([
+                "## Import parent context",
+                "@../CLAUDE.md",
+                ""
+            ])
+            
+        lines.extend([
+            "## Automatic project context",
+            "@.claude/format.md",
+            "",
+            "## 💡 QUICK COMMANDS",
+            "Just type these commands and I'll execute them:",
+            "- `update` or `u` - Update project context",
+            "- `check` or `c` - Quick conflict check",
+            "- `structure` or `s` - Show full project structure",
+            "- `conflicts` or `cf` - Show only conflicts",
+            "- `venv` or `v` - Setup/check Python environment",
+            "- `help` or `h` - Show all commands",
+            "- `deps` or `d` - Show dependencies",
+            "- `cleancode` or `cc` - Interactive dead code cleanup",
+            "",
+            "## ⚠️ CRITICAL RULES",
+            "",
+            "### Code style",
+            "- **NO COMMENTS** in code files",
+            "- Use **ENGLISH ONLY** for all code, variables, functions, and documentation",
+            "- Self-documenting code with clear naming",
+            "",
+            "### Python environment",
+            "- ALWAYS use `python3` instead of `python`",
+            "- ALWAYS use `pip3` instead of `pip`",
+            "- ALWAYS work in virtual environment `venv`",
+            "- Activate venv: `source venv/bin/activate` (Linux/Mac) or `venv\\Scripts\\activate` (Windows)",
+            "",
+            "### Directory structure",
+            "- ALWAYS check existing directories before creating new ones",
+            "- Use `python3 .claude/update.py` to update context",
+            "- DO NOT create new config*/test*/src* directories without checking",
+            "",
+            "### Code unification principle",
+            "- **AVOID DUPLICATION**: Before creating new functionality, check existing code",
+            "- **EXTEND, DON'T DUPLICATE**: Build on existing solutions rather than creating parallel implementations",
+            "- **UNIFIED APPROACH**: If similar functionality exists, refactor to create a single, flexible solution",
+            "- Examples:",
+            "  - Don't create `user_validator.py` if `validators.py` exists - extend it",
+            "  - Don't create `config2/` if `config/` exists - reorganize existing",
+            "  - Don't create `new_utils.py` if `utils.py` exists - add to existing",
+            "",
+            "### ⚠️ IMPORTANT UPDATE RULE",
+            "If I make structural changes (create/delete directories, add new modules),",
+            "you MUST suggest running:",
+            "```bash",
+            "python3 .claude/update.py",
+            "```",
+            "",
+            "### Automatic checks",
+            "- **Before creating new directories** → first run: `python3 .claude/update.py`",
+            "- **Before creating similar functionality** → check existing code structure",
+            "- **After refactoring structure** → must run: `python3 .claude/update.py`",
+            "- **When unsure about structure** → update context before continuing",
+            "",
+            "### Context update workflow",
+            "1. Ensure venv is activated",
+            "2. Run: `python3 .claude/update.py`",
+            "3. Check updated context: `cat .claude/format.md`",
+            "4. Continue work with current context",
+            "",
+            "## Typical scenarios requiring update",
+            "",
+            "### 1. Creating new functionality",
+            "```bash",
+            "# FIRST update context",
+            "python3 .claude/update.py",
+            "# THEN create files/folders",
+            "```",
+            "",
+            "### 2. Structure refactoring",
+            "```bash",
+            "# Before refactoring - check current structure",
+            "python3 .claude/update.py",
+            "# After refactoring - update context",
+            "python3 .claude/update.py",
+            "```",
+            "",
+            "### 3. Resolving conflicts",
+            "If I say something like:",
+            "- \"put in configs\" (but config exists)",
+            "- \"create tests\" (but test exists)",
+            "- \"add to src\" (but source exists)",
+            "",
+            "YOU MUST:",
+            "1. Stop",
+            "2. Suggest running `python3 .claude/update.py`",
+            "3. Show existing directories from context",
+            "4. Ask which one to use",
+            "",
+            "## Python-specific rules",
+            "",
+            "### Installing dependencies",
+            "```bash",
+            "# ALWAYS in venv",
+            "source venv/bin/activate  # or venv\\Scripts\\activate on Windows",
+            "pip3 install -r requirements.txt",
+            "```",
+            "",
+            "### Creating venv if missing",
+            "```bash",
+            "python3 -m venv venv",
+            "source venv/bin/activate",
+            "pip3 install --upgrade pip",
+            "```",
+            "",
+            "### Adding new packages",
+            "```bash",
+            "# In activated venv",
+            "pip3 install package_name",
+            "pip3 freeze > requirements.txt",
+            "python3 .claude/update.py  # Update context!",
+            "```",
+            "",
+            "## Project commands",
+            "",
+            "### Quick commands (just type these):",
+            "- `update` or `u` → Update project context",
+            "- `check` or `c` → Quick conflict check",
+            "- `structure` or `s` → Show project structure",
+            "- `conflicts` or `cf` → Show current conflicts",
+            "- `venv` or `v` → Setup Python environment",
+            "- `help` or `h` → Show all commands",
+            "- `deps` or `d` → Show dependencies",
+            "- `cleancode` or `cc` → Interactive dead code cleanup",
+            "",
+            "### Command mappings:",
+            "When I type `update` or `u`, you MUST run: `python3 .claude/update.py`",
+            "When I type `check` or `c`, you MUST run: `python3 .claude/check.py`",
+            "When I type `structure` or `s`, you MUST run: `cat .claude/context.json | python3 -m json.tool`",
+            "When I type `conflicts` or `cf`, you MUST run: `cat .claude/format.md | grep -A20 \"WARNINGS\"`",
+            "When I type `venv` or `v`, you MUST run: `bash .claude/setup.sh`",
+            "When I type `help` or `h`, you MUST run: `python3 claude-context.py help`",
+            "When I type `deps` or `d`, you MUST run: `cat .claude/format.md | grep -A10 \"Dependencies\"`",
+            "When I type `cleancode` or `cc`, you MUST run: `python3 claude-context.py cleancode --interactive`",
+            "",
+            "## Initial setup (if not done yet)",
+            "```bash",
+            "# 1. Create virtual environment",
+            "python3 -m venv venv",
+            "",
+            "# 2. Activate venv",
+            "source venv/bin/activate  # Linux/Mac",
+            "# or",
+            "venv\\Scripts\\activate     # Windows",
+            "",
+            "# 3. Update context",
+            "python3 .claude/update.py",
+            "```"
+        ])
+        
+        return "\n".join(lines)
     
-    def _check_claude_md_needs_update(self, content: str) -> bool:
-        """Check if CLAUDE.md needs format updates"""
-        # Look for modern format indicators
-        modern_indicators = [
-            'Claude Context Box Rules',
-            'Quick Commands for Claude', 
-            'python3 claude-context.py',
-            'Skylos integration'
-        ]
-        
-        # If it doesn't have modern structure, it needs update
-        has_modern_structure = any(indicator in content for indicator in modern_indicators)
-        return not has_modern_structure
     
-    def _extract_preserved_content(self, content: str) -> Dict[str, str]:
-        """Extract content to preserve from existing CLAUDE.md"""
-        # This would analyze existing content and extract valuable sections
-        # For now, return the full content to be preserved
-        return {
-            'existing_content': content,
-            'project_description': '',
-            'custom_sections': []
-        }
         
-    def _generate_enhanced_claude_md(self, preserved: Dict[str, str]) -> str:
-        """Generate enhanced CLAUDE.md with preserved content"""
-        timestamp = datetime.now().strftime('%Y-%m-%d')
-        
-        template = f"""## ===== Claude Context Box Rules =====
-
-## Automatic project context
-@.claude/format.md
-
-## Quick Commands for Claude
-When user types single letter commands, respond with:
-- `h` or `help` - Show Claude Context Box commands: `python3 claude-context.py help`
-- `s` or `sync` - Sync project: `python3 claude-context.py sync` 
-- `u` or `update` - Update context: `python3 claude-context.py update`
-- `c` or `check` - Check conflicts: `python3 claude-context.py check`
-- `cc` or `cleancode` - Clean dead code: `python3 claude-context.py cleancode --interactive`
-
-# {self.root.name} Project Context
-
-## Quick Reference
-- **Project**: {self.root.name}
-- **Type**: Enhanced with Claude Context Box
-- **Last Updated**: {timestamp}
-
-## 💡 QUICK COMMANDS
-Just type these commands and I'll execute them:
-- `update` or `u` - Update project context
-- `check` or `c` - Quick conflict check
-- `structure` or `s` - Show full project structure
-- `conflicts` or `cf` - Show only conflicts
-- `venv` or `v` - Setup/check Python environment
-- `help` or `h` - Show all commands
-- `cleancode` or `cc` - Interactive dead code cleanup
-
-## ⚠️ CRITICAL RULES
-
-### Code style
-- **NO COMMENTS** in code files
-- Use **ENGLISH ONLY** for all code, variables, functions, and documentation
-- Self-documenting code with clear naming
-
-### Python environment
-- ALWAYS use `python3` instead of `python`
-- ALWAYS use `pip3` instead of `pip` 
-- ALWAYS work in virtual environment `venv`
-- Activate venv: `source venv/bin/activate` (Linux/Mac) or `venv\\Scripts\\activate` (Windows)
-
-### Directory structure
-- ALWAYS check existing directories before creating new ones
-- Use `python3 .claude/update.py` to update context
-- DO NOT create new config*/test*/src* directories without checking
-
-### Code unification principle
-- **AVOID DUPLICATION**: Before creating new functionality, check existing code
-- **EXTEND, DON'T DUPLICATE**: Build on existing solutions rather than creating parallel implementations
-- **UNIFIED APPROACH**: If similar functionality exists, refactor to create a single, flexible solution
-
-### Claude Context Box Management
-```bash
-# Project context management  
-python3 claude-context.py help         # Show all available commands
-python3 claude-context.py sync         # Sync documentation and context
-python3 claude-context.py update       # Update project context
-python3 claude-context.py check        # Quick conflict check
-python3 claude-context.py modules      # List modules with status
-python3 claude-context.py structure    # Show project structure
-
-# Code cleanup with Skylos
-python3 claude-context.py cleancode --interactive  # Interactive cleanup
-python3 claude-context.py cleancode --dry-run      # Preview changes only
-python3 claude-context.py cleancode --confidence 80 # High confidence only
-
-# Short aliases work too
-python3 claude-context.py h    # help
-python3 claude-context.py sy   # sync
-python3 claude-context.py u    # update  
-python3 claude-context.py cc   # cleancode
-```
-
-### Command mappings:
-When I type `update` or `u`, you MUST run: `python3 .claude/update.py`
-When I type `check` or `c`, you MUST run: `python3 .claude/check.py`
-When I type `structure` or `s`, you MUST run: `cat .claude/context.json | python3 -m json.tool`
-When I type `conflicts` or `cf`, you MUST run: `cat .claude/format.md | grep -A20 "WARNINGS"`
-When I type `venv` or `v`, you MUST run: `bash .claude/setup.sh`
-When I type `help` or `h`, you MUST show: the command list from CLAUDE.md
-When I type `cleancode` or `cc`, you MUST run: `python3 claude-context.py cleancode --interactive`
-
-## ⚠️ IMPORTANT UPDATE RULE
-If I make structural changes (create/delete directories, add new modules),
-you MUST suggest running:
-```bash
-python3 .claude/update.py
-```
-
-### Automatic checks
-- **Before creating new directories** → first run: `python3 .claude/update.py`
-- **Before creating similar functionality** → check existing code structure
-- **After refactoring structure** → must run: `python3 .claude/update.py`
-- **When unsure about structure** → update context before continuing
-
-"""
-
-        # Add preserved content if any
-        if preserved.get('existing_content'):
-            template += f"""
-
-## Preserved Original Content
-{preserved['existing_content']}
-
-"""
-
-        template += f"""
----
-<!-- AUTO-GENERATED SECTION - DO NOT EDIT -->
-*This file is managed by Claude Context Box*
-*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-"""
-        
-        return template
 
     # ===== SCRIPT GENERATION (FROM OLD VERSION) =====
     
@@ -1320,6 +1277,38 @@ if [ -f "requirements.txt" ]; then
     pip3 install -r requirements.txt
 fi
 
+# Check if Skylos is installed
+echo "🔍 Checking Skylos installation..."
+if ! command -v skylos &> /dev/null; then
+    echo "📦 Installing Skylos for dead code detection..."
+    
+    # Check if git is available
+    if command -v git &> /dev/null; then
+        # Create temp directory
+        TEMP_DIR=$(mktemp -d)
+        cd "$TEMP_DIR"
+        
+        # Clone and install Skylos
+        git clone https://github.com/duriantaco/skylos.git
+        pip3 install ./skylos
+        pip3 install inquirer
+        
+        # Cleanup
+        cd -
+        rm -rf "$TEMP_DIR"
+        
+        if command -v skylos &> /dev/null; then
+            echo "✅ Skylos installed successfully!"
+        else
+            echo "⚠️  Skylos installation failed. You can install it manually later."
+        fi
+    else
+        echo "⚠️  Git not found. Skylos will be installed when you run cleancode command."
+    fi
+else
+    echo "✅ Skylos is already installed"
+fi
+
 echo "🔄 Updating project context..."
 python3 .claude/update.py
 
@@ -1347,14 +1336,38 @@ reports/
         gitignore_path = self.claude_dir / '.gitignore'
         gitignore_path.write_text(gitignore_content)
         
+    def create_claude_context_py(self):
+        """Create claude-context.py file that copies content from install-claude-context.py"""
+        print("🔗 Creating claude-context.py...")
+        
+        # Path to current installer
+        installer_path = Path(__file__).resolve()
+        target_path = self.root / 'claude-context.py'
+        
+        # If installer is named install-claude-context.py, copy it
+        if installer_path.name == 'install-claude-context.py':
+            # Copy the file
+            shutil.copy2(installer_path, target_path)
+            # Make it executable
+            target_path.chmod(target_path.stat().st_mode | stat.S_IEXEC)
+            print("✅ Created claude-context.py")
+        elif installer_path.name == 'claude-context.py':
+            # Already using the right name
+            print("✅ claude-context.py already exists")
+        else:
+            # Unknown name, create a copy anyway
+            shutil.copy2(installer_path, target_path)
+            target_path.chmod(target_path.stat().st_mode | stat.S_IEXEC)
+            print("✅ Created claude-context.py")
+        
     def create_claude_md_full(self):
-        """Create full CLAUDE.md with enhanced instructions (FROM OLD VERSION + ENHANCEMENTS)"""
+        """Create full CLAUDE.md with enhanced instructions"""
         print("📝 Creating comprehensive CLAUDE.md...")
         
         claude_md_path = self.root / 'CLAUDE.md'
-        parent_claude = self.root.parent / 'CLAUDE.md'
         
-        content = self._generate_enhanced_claude_md({})
+        # Just use the new command header format
+        content = self._generate_command_header()
         claude_md_path.write_text(content)
         
         print("✅ Comprehensive CLAUDE.md created with full instructions")
@@ -1374,12 +1387,11 @@ reports/
         # Dead code analysis
         dead_code = analysis.get('dead_code_analysis')
         if dead_code:
-            print(f"Dead code items: {dead_code['total_items']}")
-            if dead_code['has_dead_code']:
-                print(f"  - Unused imports: {dead_code['unused_imports']}")
-                print(f"  - Unused functions: {dead_code['unused_functions']}")
-                print(f"  - Unused classes: {dead_code['unused_classes']}")
-                print(f"  - Unused variables: {dead_code['unused_variables']}")
+            if dead_code.get('skylos_available'):
+                print(f"\n🧹 Skylos: ✅ Installed")
+            else:
+                print(f"\n🧹 Skylos: ⏳ Not installed (will install on first use)")
+            print(f"   {dead_code.get('message', '')}")
         
         # Indicators
         print(f"\n📈 Analysis scores:")
@@ -1451,7 +1463,7 @@ reports/
         print("💡 Now run: claude")
         print("")
         
-    def install(self):
+    def install(self, mode: str = None):
         """Main installation entry point"""
         print("🚀 Claude Context Box - Ultimate Hybrid Installer")
         print("=" * 55)
@@ -1468,7 +1480,7 @@ reports/
             self.fresh_install()
         else:
             # Ask user what to do
-            choice = self.ask_installation_type()
+            choice = self.ask_installation_type(mode)
             
             if choice == "update":
                 self.update_existing_installation()
@@ -1671,6 +1683,8 @@ def main():
                       help='Dry run mode (with cleancode)')
     parser.add_argument('--confidence', type=int, default=60,
                       help='Confidence threshold for cleancode (0-100)')
+    parser.add_argument('--mode', choices=['update', 'fresh', 'cancel'],
+                      help='Installation mode (for non-interactive install)')
     
     args = parser.parse_args()
     
@@ -1690,7 +1704,7 @@ def main():
     
     if cmd == 'install':
         installer = ClaudeContextHybridInstaller()
-        installer.install()
+        installer.install(args.mode)
     else:
         manager = ClaudeContextManager()
         
