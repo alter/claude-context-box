@@ -17,6 +17,16 @@ class ClaudeContextInstaller:
         self.root = Path.cwd()
         self.claude_dir = self.root / '.claude'
         
+        # Common venv check code for all Python scripts
+        self.venv_check = '''# Check if we should use venv Python
+venv_python = Path.cwd() / 'venv' / 'bin' / 'python3'
+if venv_python.exists() and sys.executable != str(venv_python):
+    # Re-run with venv Python
+    import subprocess
+    result = subprocess.run([str(venv_python), __file__] + sys.argv[1:])
+    sys.exit(result.returncode)
+'''
+        
     def install(self, auto_yes=False):
         """Main installation process"""
         print("🚀 Claude Context Box - Installation")
@@ -47,6 +57,7 @@ class ClaudeContextInstaller:
         self.create_setup_script()
         self.create_help_script()
         self.create_cleancode_script()
+        self.create_context_script()
         self.create_gitignore()
         print("✅ All scripts updated to latest version")
         
@@ -57,10 +68,14 @@ class ClaudeContextInstaller:
         self.run_initial_update()
         
         print("\n✅ Installation completed!")
+        print("\n🚀 IMPORTANT: Initialize component documentation:")
+        print("  1. Type: ctx init --auto")
+        print("  2. Type: u (to update context)")
         print("\n📋 Quick commands (type in Claude):")
         print("  u     - Update context")
         print("  c     - Check conflicts")
         print("  cc    - Clean dead code")
+        print("  ctx   - Manage CONTEXT.llm files")
         print("  h     - Show help")
         print("\n💡 Activate venv: source venv/bin/activate")
         
@@ -79,6 +94,8 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Set, Any
+
+''' + self.venv_check + '''
 
 class ProjectContextManager:
     def __init__(self, root_path: str = "."):
@@ -407,6 +424,50 @@ class ProjectContextManager:
         for ext, count in list(context["statistics"]["file_types"].items())[:5]:
             md_lines.append(f"- `{ext}`: {count} files")
         
+        # CONTEXT.llm Integration
+        context_files = list(self.root.rglob('CONTEXT.llm'))
+        if context_files:
+            md_lines.extend([
+                "",
+                "## 📦 Component Architecture (from CONTEXT.llm)",
+                ""
+            ])
+            
+            components_by_type = {}
+            for context_file in context_files:
+                try:
+                    content = context_file.read_text()
+                    comp_type = 'unknown'
+                    comp_name = 'Unknown'
+                    purpose = ''
+                    
+                    # Simple parsing for format.md
+                    for line in content.split('\\n'):
+                        if line.startswith('@component:'):
+                            comp_name = line.split(':', 1)[1].strip()
+                        elif line.startswith('@type:'):
+                            comp_type = line.split(':', 1)[1].strip()
+                        elif line.startswith('@purpose:'):
+                            purpose = line.split(':', 1)[1].strip()
+                    
+                    if comp_type not in components_by_type:
+                        components_by_type[comp_type] = []
+                    
+                    rel_path = context_file.parent.relative_to(self.root)
+                    components_by_type[comp_type].append({
+                        'path': str(rel_path),
+                        'name': comp_name,
+                        'purpose': purpose
+                    })
+                except:
+                    pass
+            
+            for comp_type, components in sorted(components_by_type.items()):
+                md_lines.append(f"### {comp_type.title()} Components")
+                for comp in components:
+                    md_lines.append(f"- `{comp['path']}/{comp['name']}`: {comp['purpose']}")
+                md_lines.append("")
+        
         md_lines.extend([
             "",
             "## 🔄 Context Update Reminder",
@@ -465,6 +526,8 @@ if __name__ == "__main__":
 import json
 import sys
 from pathlib import Path
+
+''' + self.venv_check + '''
 
 def quick_check():
     context_file = Path(".claude/context.json")
@@ -547,6 +610,10 @@ echo "✅ Done! Environment is ready."
     def create_help_script(self):
         """Create help.py for showing available commands"""
         content = '''#!/usr/bin/env python3
+import sys
+from pathlib import Path
+
+''' + self.venv_check + '''
 
 def show_help():
     print("🚀 CLAUDE CONTEXT BOX - HELP")
@@ -563,11 +630,19 @@ def show_help():
     print("  deps, d       - Show dependencies")
     print("  cleancode, cc - Interactive dead code cleanup")
     print()
+    print("📚 CONTEXT.llm COMMANDS:")
+    print("  scan          - Find components without docs")
+    print("  ctx init      - Create CONTEXT.llm for ALL modules")
+    print("  ctx generate  - Create CONTEXT.llm for one module")
+    print("  ctx update    - Update existing CONTEXT.llm files")
+    print("  graph         - Show component dependencies")
+    print()
     
     print("🔧 DIRECT COMMANDS:")
-    print("  python3 .claude/update.py    - Update context")
-    print("  python3 .claude/check.py     - Quick check")
-    print("  python3 .claude/cleancode.py - Clean dead code")
+    print("  python3 .claude/update.py     - Update context")
+    print("  python3 .claude/check.py      - Quick check")
+    print("  python3 .claude/cleancode.py  - Clean dead code")
+    print("  python3 .claude/context.py    - CONTEXT.llm tools")
     print("  bash .claude/setup.sh         - Setup environment")
     print()
     
@@ -597,6 +672,8 @@ import subprocess
 import tempfile
 import argparse
 from pathlib import Path
+
+''' + self.venv_check + '''
 
 class SkylosScanner:
     def __init__(self, root_path=None):
@@ -736,6 +813,633 @@ if __name__ == '__main__':
         cleancode_path.write_text(content)
         cleancode_path.chmod(cleancode_path.stat().st_mode | stat.S_IEXEC)
     
+    def create_context_script(self):
+        """Create context.py for CONTEXT.llm management"""
+        content = '''#!/usr/bin/env python3
+"""
+CONTEXT.llm management tool
+Provides compact, LLM-optimized component documentation
+"""
+import os
+import re
+import sys
+import json
+import argparse
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+
+''' + self.venv_check + '''
+
+class ContextLLMParser:
+    def __init__(self):
+        self.sections = {}
+        self.current_section = None
+        self.current_content = []
+        
+    def parse_file(self, filepath: Path) -> Dict[str, Any]:
+        self.sections = {}
+        self.current_section = None
+        self.current_content = []
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            
+        for line in lines:
+            line = line.rstrip()
+            
+            if line.startswith('@') and ':' in line:
+                self._save_current_section()
+                
+                key, value = line.split(':', 1)
+                key = key.strip('@').strip()
+                value = value.strip()
+                
+                if value.startswith('[') and value.endswith(']'):
+                    value = [v.strip() for v in value[1:-1].split(',')]
+                elif value == '{':
+                    self.current_section = key
+                    self.current_content = []
+                else:
+                    self.sections[key] = value
+                    self.current_section = key
+                    self.current_content = []
+            elif self.current_section:
+                if line.strip():
+                    self.current_content.append(line)
+        
+        self._save_current_section()
+        return self.sections
+    
+    def _save_current_section(self):
+        if self.current_section and self.current_content:
+            content = self._parse_content(self.current_content)
+            self.sections[self.current_section] = content
+    
+    def _parse_content(self, lines: List[str]) -> Any:
+        if not lines:
+            return None
+            
+        if all(line.startswith('- ') for line in lines if line.strip()):
+            return [line[2:].strip() for line in lines if line.strip()]
+        
+        if all(':' in line for line in lines if line.strip() and not line.startswith('-')):
+            result = {}
+            for line in lines:
+                if ':' in line and not line.startswith('-'):
+                    key, value = line.split(':', 1)
+                    result[key.strip()] = value.strip()
+            return result
+        
+        return '\\n'.join(lines)
+
+class ContextLLMGenerator:
+    def __init__(self):
+        self.template = {
+            'component': '',
+            'type': '',
+            'deps': [],
+            'exports': [],
+            'purpose': '',
+            'interface': [],
+            'behavior': [],
+        }
+    
+    def from_dict(self, data: Dict[str, Any]) -> str:
+        lines = []
+        
+        for key, value in data.items():
+            if isinstance(value, list):
+                if value:
+                    lines.append(f"@{key}: [{', '.join(str(v) for v in value)}]")
+            elif isinstance(value, dict):
+                lines.append(f"@{key}:")
+                for k, v in value.items():
+                    lines.append(f"- {k}: {v}")
+            elif value:
+                lines.append(f"@{key}: {value}")
+                if key in ['purpose', 'interface', 'behavior', 'state', 'errors', 'config', 'notes']:
+                    lines.append('')
+        
+        return '\\n'.join(lines)
+    
+    def from_code_analysis(self, filepath: Path) -> Dict[str, Any]:
+        content = filepath.read_text()
+        result = self.template.copy()
+        
+        result['component'] = filepath.stem
+        
+        if filepath.suffix == '.py':
+            result['type'] = self._detect_python_type(content)
+            result['deps'] = self._extract_python_imports(content)
+            result['exports'] = self._extract_python_exports(content)
+        elif filepath.suffix in ['.js', '.ts', '.jsx', '.tsx']:
+            result['type'] = self._detect_js_type(content, filepath.suffix)
+            result['deps'] = self._extract_js_imports(content)
+            result['exports'] = self._extract_js_exports(content)
+        
+        return result
+    
+    def _detect_python_type(self, content: str) -> str:
+        if 'class.*Model' in content or 'Base' in content:
+            return 'data'
+        elif 'app.' in content or 'router.' in content:
+            return 'api'
+        elif 'Service' in content:
+            return 'service'
+        else:
+            return 'util'
+    
+    def _detect_js_type(self, content: str, ext: str) -> str:
+        if ext in ['.jsx', '.tsx'] or 'React' in content:
+            return 'ui'
+        elif 'router' in content.lower() or 'express' in content:
+            return 'api'
+        elif 'service' in content.lower():
+            return 'service'
+        else:
+            return 'module'
+    
+    def _extract_python_imports(self, content: str) -> List[str]:
+        imports = []
+        for match in re.finditer(r'(?:from\\s+(\\S+)\\s+)?import\\s+(.+)', content):
+            if match.group(1):
+                imports.append(match.group(1).split('.')[0])
+            else:
+                for imp in match.group(2).split(','):
+                    imports.append(imp.strip().split()[0])
+        return list(set(imports))
+    
+    def _extract_js_imports(self, content: str) -> List[str]:
+        imports = []
+        for match in re.finditer(r'(?:import|require)\\s*\\(?[\\'"]([^\\'\"\\)]+)[\\'"]', content):
+            imp = match.group(1)
+            if not imp.startswith('.'):
+                imports.append(imp.split('/')[0])
+        return list(set(imports))
+    
+    def _extract_python_exports(self, content: str) -> List[str]:
+        exports = []
+        
+        for match in re.finditer(r'class\\s+(\\w+)', content):
+            exports.append(match.group(1))
+        
+        for match in re.finditer(r'def\\s+(\\w+)', content):
+            func_name = match.group(1)
+            if not func_name.startswith('_'):
+                exports.append(func_name)
+        
+        if '__all__' in content:
+            match = re.search(r'__all__\\s*=\\s*\\[(.*?)\\]', content, re.DOTALL)
+            if match:
+                for item in match.group(1).split(','):
+                    item = item.strip().strip('"\\\'')
+                    if item:
+                        exports.append(item)
+        
+        return list(set(exports))
+    
+    def _extract_js_exports(self, content: str) -> List[str]:
+        exports = []
+        
+        for match in re.finditer(r'export\\s+(?:default\\s+)?(?:class|function|const|let|var)\\s+(\\w+)', content):
+            exports.append(match.group(1))
+        
+        if 'export default' in content and 'default' not in exports:
+            exports.append('default')
+        
+        for match in re.finditer(r'module\\.exports\\s*=\\s*{([^}]+)}', content):
+            for item in match.group(1).split(','):
+                if ':' in item:
+                    exports.append(item.split(':')[0].strip())
+        
+        return list(set(exports))
+
+class ContextManager:
+    def __init__(self):
+        self.root = Path.cwd()
+        self.parser = ContextLLMParser()
+        self.generator = ContextLLMGenerator()
+        
+    def scan(self):
+        """Find modules without CONTEXT.llm"""
+        skipped_dirs = {'.git', '.venv', 'venv', '__pycache__', '.pytest_cache', 
+                       'node_modules', '.claude', 'dist', 'build', '.tox'}
+        
+        # Find all directories with Python files but no CONTEXT.llm
+        missing_dirs = set()
+        for py_file in self.root.rglob('*.py'):
+            # Skip if in ignored directory
+            if any(skip in py_file.parts for skip in skipped_dirs):
+                continue
+            if py_file.name.startswith('__') or py_file.name.startswith('.'):
+                continue
+            
+            # Check if directory has CONTEXT.llm
+            if not (py_file.parent / 'CONTEXT.llm').exists():
+                missing_dirs.add(py_file.parent)
+        
+        if missing_dirs:
+            print(f"Found {len(missing_dirs)} directories without CONTEXT.llm:")
+            sorted_dirs = sorted(missing_dirs, key=lambda x: str(x))
+            for path in sorted_dirs[:10]:
+                print(f"  {path.relative_to(self.root)}/")
+            if len(missing_dirs) > 10:
+                print(f"  ... and {len(missing_dirs) - 10} more")
+            print(f"\\nRun 'ctx init' to create CONTEXT.llm for all directories")
+        else:
+            print("✅ All modules have CONTEXT.llm files!")
+    
+    def generate(self, filepath: Optional[str] = None, auto: bool = False):
+        """Generate CONTEXT.llm for modules"""
+        if filepath:
+            file_path = self.root / filepath
+            if not file_path.exists():
+                print(f"❌ File not found: {filepath}")
+                return
+                
+            context_data = self.generator.from_code_analysis(file_path)
+            context_content = self.generator.from_dict(context_data)
+            
+            print(f"\\nGenerated CONTEXT.llm for {filepath}:")
+            print("-" * 40)
+            print(context_content)
+            print("-" * 40)
+            
+            if not auto:
+                response = input("\\nSave this file? (y/n): ")
+                if response.lower() != 'y':
+                    return
+            
+            context_path = file_path.parent / 'CONTEXT.llm'
+            context_path.write_text(context_content)
+            print(f"✅ Saved to {context_path}")
+        else:
+            # Auto-generate for all missing
+            suggestions = []
+            scan_dirs = ['src', 'lib', 'components', 'services', 'api', 'models', 'utils']
+            
+            for dir_name in scan_dirs:
+                dir_path = self.root / dir_name
+                if dir_path.exists():
+                    for file_path in dir_path.rglob('*.py'):
+                        if not (file_path.parent / 'CONTEXT.llm').exists():
+                            context_data = self.generator.from_code_analysis(file_path)
+                            if context_data['deps'] or context_data['exports']:
+                                suggestions.append({
+                                    'file': file_path,
+                                    'data': context_data
+                                })
+            
+            if not suggestions:
+                print("✅ All modules already have CONTEXT.llm files!")
+                return
+            
+            print(f"\\nFound {len(suggestions)} modules without CONTEXT.llm")
+            
+            for suggestion in suggestions:
+                file_path = suggestion['file']
+                context_content = self.generator.from_dict(suggestion['data'])
+                
+                if not auto:
+                    print(f"\\n{'='*60}")
+                    print(f"Generate for {file_path.relative_to(self.root)}?")
+                    print("-" * 40)
+                    print(context_content[:200] + '...' if len(context_content) > 200 else context_content)
+                    print("-" * 40)
+                    
+                    response = input("Generate? (y/n/q): ")
+                    if response.lower() == 'q':
+                        break
+                    if response.lower() != 'y':
+                        continue
+                
+                context_path = file_path.parent / 'CONTEXT.llm'
+                context_path.write_text(context_content)
+                print(f"✅ Generated: {context_path.relative_to(self.root)}")
+    
+    def parse(self, filepath: str, format: str = 'json'):
+        """Parse CONTEXT.llm file"""
+        file_path = self.root / filepath
+        if not file_path.exists():
+            print(f"❌ File not found: {filepath}")
+            return
+            
+        parsed = self.parser.parse_file(file_path)
+        
+        if format == 'json':
+            print(json.dumps(parsed, indent=2, ensure_ascii=False))
+        elif format == 'yaml':
+            try:
+                import yaml
+                print(yaml.dump(parsed, allow_unicode=True, default_flow_style=False))
+            except ImportError:
+                print("❌ PyYAML not installed. Use 'pip3 install pyyaml'")
+        else:
+            # Markdown format
+            lines = []
+            if 'component' in parsed:
+                lines.append(f"# {parsed['component']}")
+            for key, value in parsed.items():
+                if key != 'component':
+                    lines.append(f"\\n## {key.title()}")
+                    if isinstance(value, list):
+                        for item in value:
+                            lines.append(f"- {item}")
+                    elif isinstance(value, dict):
+                        for k, v in value.items():
+                            lines.append(f"- **{k}**: {v}")
+                    else:
+                        lines.append(str(value))
+            print('\\n'.join(lines))
+    
+    def graph(self):
+        """Show dependency graph"""
+        contexts = {}
+        
+        for context_file in self.root.rglob('CONTEXT.llm'):
+            try:
+                parsed = self.parser.parse_file(context_file)
+                relative_path = context_file.parent.relative_to(self.root)
+                contexts[str(relative_path)] = parsed
+            except Exception as e:
+                print(f"Error parsing {context_file}: {e}")
+        
+        if not contexts:
+            print("No CONTEXT.llm files found")
+            return
+        
+        print("\\n📊 Component Dependency Graph\\n")
+        
+        for path, context in contexts.items():
+            component = context.get('component', path)
+            deps = context.get('deps', [])
+            
+            if deps:
+                print(f"{component}")
+                for dep in deps:
+                    # Check if dep is another component
+                    is_internal = any(
+                        other.get('component') == dep 
+                        for other in contexts.values()
+                    )
+                    marker = "└── " if deps[-1] == dep else "├── "
+                    if is_internal:
+                        print(f"  {marker}📦 {dep} (internal)")
+                    else:
+                        print(f"  {marker}📚 {dep}")
+                print()
+    
+    def init(self, auto: bool = False):
+        """Initialize CONTEXT.llm for all modules in project"""
+        print("🔍 Scanning project for modules...")
+        
+        initialized = 0
+        skipped_dirs = {'.git', '.venv', 'venv', '__pycache__', '.pytest_cache', 
+                       'node_modules', '.claude', 'dist', 'build', '.tox'}
+        
+        # Find all directories with Python files
+        py_dirs = set()
+        for py_file in self.root.rglob('*.py'):
+            # Skip if in ignored directory
+            if any(skip in py_file.parts for skip in skipped_dirs):
+                continue
+            if py_file.name.startswith('__') or py_file.name.startswith('.'):
+                continue
+            py_dirs.add(py_file.parent)
+        
+        print(f"Found {len(py_dirs)} directories with Python files")
+        
+        for dir_path in sorted(py_dirs):
+            # Skip if CONTEXT.llm already exists
+            context_path = dir_path / 'CONTEXT.llm'
+            if context_path.exists():
+                continue
+            
+            # Find main Python file in directory
+            py_files = list(dir_path.glob('*.py'))
+            if not py_files:
+                continue
+            
+            # Choose the main file
+            main_file = None
+            dir_name = dir_path.name
+            
+            # Priority: same name as dir, main.py, __init__.py, or first file
+            for py_file in py_files:
+                if py_file.stem == dir_name:
+                    main_file = py_file
+                    break
+                elif py_file.name == 'main.py':
+                    main_file = py_file
+                    break
+                elif py_file.name == '__init__.py' and len(py_files) > 1:
+                    # Use __init__.py only if there are other files
+                    main_file = py_file
+            
+            if not main_file:
+                main_file = py_files[0]
+            
+            # Generate context
+            context_data = self.generator.from_code_analysis(main_file)
+            
+            # Always create CONTEXT.llm, even if no deps/exports
+            if not context_data['purpose']:
+                context_data['purpose'] = f"Module in {dir_path.relative_to(self.root)}"
+                
+            context_content = self.generator.from_dict(context_data)
+            
+            if not auto:
+                print(f"\\nCreate CONTEXT.llm for {dir_path.relative_to(self.root)}/?")
+                print("-" * 40)
+                print(context_content[:150] + '...' if len(context_content) > 150 else context_content)
+                print("-" * 40)
+                
+                response = input("Create? (y/n/a/q): ")
+                if response.lower() == 'q':
+                    break
+                elif response.lower() == 'a':
+                    auto = True
+                elif response.lower() != 'y':
+                    continue
+            
+            context_path.write_text(context_content)
+            print(f"✅ Created: {context_path.relative_to(self.root)}/CONTEXT.llm")
+            initialized += 1
+        
+        print(f"\\n✅ Initialized {initialized} CONTEXT.llm files")
+        if initialized > 0:
+            print("💡 Run 'update' to refresh project context")
+    
+    def update_contexts(self):
+        """Update existing CONTEXT.llm files based on code changes"""
+        print("🔄 Updating CONTEXT.llm files...")
+        
+        updated = 0
+        for context_file in self.root.rglob('CONTEXT.llm'):
+            # Find corresponding Python file
+            py_files = list(context_file.parent.glob('*.py'))
+            if not py_files:
+                continue
+                
+            # Use the main file (same name as directory or the first one)
+            main_file = None
+            dir_name = context_file.parent.name
+            for py_file in py_files:
+                if py_file.stem == dir_name or py_file.stem == 'main':
+                    main_file = py_file
+                    break
+            
+            if not main_file:
+                main_file = py_files[0]
+            
+            # Parse existing CONTEXT.llm
+            old_context = self.parser.parse_file(context_file)
+            
+            # Generate new context from code
+            new_context = self.generator.from_code_analysis(main_file)
+            
+            # Preserve manual edits (purpose, behavior, notes)
+            if 'purpose' in old_context and old_context['purpose']:
+                new_context['purpose'] = old_context['purpose']
+            if 'behavior' in old_context:
+                new_context['behavior'] = old_context['behavior']
+            if 'notes' in old_context:
+                new_context['notes'] = old_context['notes']
+            
+            # Check if anything changed
+            if (set(new_context.get('deps', [])) != set(old_context.get('deps', [])) or
+                set(new_context.get('exports', [])) != set(old_context.get('exports', []))):
+                
+                new_content = self.generator.from_dict(new_context)
+                context_file.write_text(new_content)
+                print(f"✅ Updated: {context_file.relative_to(self.root)}")
+                updated += 1
+        
+        print(f"\\n✅ Updated {updated} CONTEXT.llm files")
+    
+    def help(self):
+        """Show CONTEXT.llm format help"""
+        print("""
+# CONTEXT.llm Format Reference
+
+## Basic Structure
+```
+@component: ComponentName
+@type: service|module|api|ui|data|util
+@deps: [dep1, dep2, dep3]
+@exports: [export1, export2]
+
+@purpose:
+Single line description of component purpose
+
+@interface:
+- method1(param1: type) -> returnType
+- method2() -> void
+- property1: type
+
+@behavior:
+- Key behavior or business rule
+- Error handling approach
+- Performance characteristic
+
+@errors:
+- ERROR_CODE: description
+
+@config:
+- CONFIG_KEY: type | default | description
+```
+
+## Component Types
+- **service**: Business logic services
+- **module**: General purpose modules  
+- **api**: REST/GraphQL endpoints
+- **ui**: React/Vue components
+- **data**: Models, schemas, DB layers
+- **util**: Helper functions, utilities
+
+## Benefits
+✅ 50-70% fewer tokens than Markdown
+✅ Structured & machine-readable
+✅ Auto-generated from code
+✅ Integrated with project context
+
+## Commands
+- `context init` - Initialize CONTEXT.llm for ALL modules
+- `context update` - Update existing CONTEXT.llm files
+- `context scan` - Find modules without documentation
+- `context generate [file]` - Generate CONTEXT.llm for one file
+- `context parse <file>` - View parsed content
+- `context graph` - Show dependency graph
+- `context help` - This help message
+
+## Workflow
+1. `context init --auto` - Create CONTEXT.llm for all modules
+2. `update` - Include all CONTEXT.llm in project context
+3. Work on code...
+4. `context update` - Update CONTEXT.llm when code changes
+5. `update` - Refresh project context
+""")
+
+def main():
+    parser = argparse.ArgumentParser(description='CONTEXT.llm management')
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
+    
+    # Init command
+    init_parser = subparsers.add_parser('init', help='Initialize CONTEXT.llm for all modules')
+    init_parser.add_argument('--auto', action='store_true', help='Auto-confirm all')
+    
+    # Update command
+    update_parser = subparsers.add_parser('update', help='Update existing CONTEXT.llm files')
+    
+    # Scan command
+    scan_parser = subparsers.add_parser('scan', help='Find modules without CONTEXT.llm')
+    
+    # Generate command
+    gen_parser = subparsers.add_parser('generate', help='Generate CONTEXT.llm files')
+    gen_parser.add_argument('file', nargs='?', help='Specific file to generate for')
+    gen_parser.add_argument('--auto', action='store_true', help='Auto-confirm generation')
+    
+    # Parse command
+    parse_parser = subparsers.add_parser('parse', help='Parse CONTEXT.llm file')
+    parse_parser.add_argument('file', help='CONTEXT.llm file to parse')
+    parse_parser.add_argument('--format', choices=['json', 'yaml', 'md'], default='json')
+    
+    # Graph command
+    graph_parser = subparsers.add_parser('graph', help='Show dependency graph')
+    
+    # Help command
+    help_parser = subparsers.add_parser('help', help='Show format documentation')
+    
+    args = parser.parse_args()
+    
+    manager = ContextManager()
+    
+    if args.command == 'init':
+        manager.init(args.auto)
+    elif args.command == 'update':
+        manager.update_contexts()
+    elif args.command == 'scan':
+        manager.scan()
+    elif args.command == 'generate':
+        manager.generate(args.file, args.auto)
+    elif args.command == 'parse':
+        manager.parse(args.file, args.format)
+    elif args.command == 'graph':
+        manager.graph()
+    elif args.command == 'help':
+        manager.help()
+    else:
+        # Default action
+        manager.help()
+
+if __name__ == '__main__':
+    main()
+'''
+        
+        context_path = self.claude_dir / 'context.py'
+        context_path.write_text(content)
+        context_path.chmod(context_path.stat().st_mode | stat.S_IEXEC)
+    
     def create_gitignore(self):
         """Create .gitignore for .claude directory"""
         content = '''context.json
@@ -747,6 +1451,7 @@ reports/
 !setup.sh
 !help.py
 !cleancode.py
+!context.py
 !.gitignore
 '''
         
@@ -856,6 +1561,10 @@ reports/
             "- `help` or `h` - Show all commands",
             "- `deps` or `d` - Show dependencies",
             "- `cleancode` or `cc` - Interactive dead code cleanup",
+            "- `ctx init` - Initialize CONTEXT.llm for ALL modules",
+            "- `ctx update` - Update existing CONTEXT.llm files",
+            "- `scan` - Find components without documentation",
+            "- `graph` - Show component dependency graph",
             "",
             "## ⚠️ CRITICAL RULES",
             "",
@@ -884,10 +1593,29 @@ reports/
             "  - Don't create `config2/` if `config/` exists - reorganize existing",
             "  - Don't create `new_utils.py` if `utils.py` exists - add to existing",
             "",
+            "### Component documentation (AUTOMATIC)",
+            "- **ALWAYS create CONTEXT.llm** when creating new directories with code",
+            "- **ALWAYS update CONTEXT.llm** when modifying files in a directory",
+            "- **ALWAYS read CONTEXT.llm** before working with files in a directory",
+            "- Format: compact, LLM-optimized, 50-70% fewer tokens",
+            "",
+            "### CONTEXT.llm automation rules",
+            "When creating a new module/directory:",
+            "1. Create the directory and files",
+            "2. Immediately create CONTEXT.llm with component info",
+            "3. Run `update` to include in project context",
+            "",
+            "When modifying existing modules:",
+            "1. Read existing CONTEXT.llm first",
+            "2. Update code as needed", 
+            "3. Update CONTEXT.llm to reflect changes",
+            "4. Run `update` if structure changed significantly",
+            "",
             "### ⚠️ IMPORTANT UPDATE RULE",
             "If I make structural changes (create/delete directories, add new modules),",
             "you MUST suggest running:",
             "```bash",
+            "source venv/bin/activate  # First activate venv",
             "python3 .claude/update.py",
             "```",
             "",
@@ -977,6 +1705,54 @@ reports/
             "When I type `help` or `h`, you MUST run: `python3 .claude/help.py`",
             "When I type `deps` or `d`, you MUST run: `cat .claude/format.md | grep -A10 \"Dependencies\"`",
             "When I type `cleancode` or `cc`, you MUST run: `python3 .claude/cleancode.py --interactive`",
+            "When I type `ctx init`, you MUST run: `python3 .claude/context.py init`",
+            "When I type `ctx update`, you MUST run: `python3 .claude/context.py update`",
+            "When I type `scan`, you MUST run: `python3 .claude/context.py scan`",
+            "When I type `graph`, you MUST run: `python3 .claude/context.py graph`",
+            "",
+            "## CONTEXT.llm Format & Examples",
+            "",
+            "### Basic format (auto-create when making directories):",
+            "```",
+            "@component: ComponentName",
+            "@type: service|module|api|ui|data|util",
+            "@deps: [dep1, dep2]",
+            "@purpose: Single line description",
+            "",
+            "@interface:",
+            "- method(param: type) -> return",
+            "- property: type",
+            "",
+            "@behavior:",
+            "- Key behavior",
+            "- Error handling",
+            "```",
+            "",
+            "### Example workflow:",
+            "User: \"Create an auth service\"",
+            "You MUST:",
+            "1. Create `services/auth/` directory",
+            "2. Create `services/auth/auth_service.py`", 
+            "3. Create `services/auth/CONTEXT.llm`:",
+            "```",
+            "@component: AuthService",
+            "@type: service",
+            "@deps: [bcrypt, jwt, models.User]",
+            "@purpose: Handle user authentication and token management",
+            "",
+            "@interface:",
+            "- authenticate(email: str, password: str) -> dict",
+            "- create_token(user_id: str) -> str",
+            "- verify_token(token: str) -> bool",
+            "",
+            "@behavior:",
+            "- Passwords hashed with bcrypt",
+            "- JWT tokens expire in 24h",
+            "- Failed auth rate limited",
+            "```",
+            "4. Run `update` to refresh context",
+            "",
+            "Run `context help` for full format documentation.",
             "",
             "## Initial setup (if not done yet)",
             "```bash",

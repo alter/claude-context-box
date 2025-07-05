@@ -10,12 +10,14 @@ A lightweight project context management system for Claude AI that helps maintai
 - **Python Environment Tracking** - Monitors virtual environment status and dependencies
 - **Dead Code Analysis** - Integrated Skylos tool for code cleanup
 - **Quick Commands** - Single-letter shortcuts for all common operations
+- **Component Documentation** - Auto-generates CONTEXT.llm files for all modules (50-70% fewer tokens)
 
 ### What It Does
 - **Creates .claude/ directory** - Contains all management scripts
 - **Generates CLAUDE.md** - Comprehensive rules and command mappings for Claude
 - **Maintains context files** - Auto-generated project structure and warnings
 - **Enforces standards** - No comments in code, English only, unified approach
+- **Auto-documents modules** - CONTEXT.llm files for component architecture
 
 
 ## 📦 Installation
@@ -31,6 +33,17 @@ python3 install-claude-context.py
 # For non-interactive mode (auto-confirms updates)
 python3 install-claude-context.py -y
 ```
+
+### Post-Installation Setup (IMPORTANT!)
+
+After installation, initialize component documentation:
+```bash
+# In Claude, type these commands:
+ctx init --auto    # Creates CONTEXT.llm for all modules
+u                  # Updates project context
+```
+
+This creates compact, LLM-optimized documentation for your entire codebase that Claude will automatically use.
 
 ### What Happens During Installation
 
@@ -50,6 +63,7 @@ your-project/
     ├── setup.sh             # Sets up Python environment
     ├── help.py              # Shows available commands
     ├── cleancode.py         # Dead code analysis
+    ├── context.py           # CONTEXT.llm management
     ├── context.json         # Generated project structure
     └── format.md            # Generated human-readable context
 ```
@@ -66,6 +80,10 @@ c              # Quick conflict check
 s              # Show project structure
 v              # Setup/check Python environment
 cc             # Interactive dead code cleanup
+ctx init       # Initialize CONTEXT.llm for all modules
+ctx update     # Update existing CONTEXT.llm files
+scan           # Find modules without documentation
+graph          # Show component dependency graph
 ```
 
 ### Command Line Usage
@@ -89,11 +107,12 @@ bash .claude/setup.sh                  # Python environment setup
 ```
 
 ### Typical Workflow
-1. **Start session**: Type `u` in Claude Code to update context
-2. **Work on code** - make your changes
-3. **Clean up**: Type `cc` for interactive dead code cleanup
-4. **Check structure**: Type `s` to see project organization
-5. **Resolve conflicts**: Type `c` to check for naming conflicts
+1. **Initial setup**: Type `ctx init --auto` to create component docs
+2. **Start session**: Type `u` in Claude Code to update context
+3. **Work on code** - make your changes (Claude auto-creates/updates CONTEXT.llm)
+4. **Clean up**: Type `cc` for interactive dead code cleanup
+5. **Check structure**: Type `s` to see project organization
+6. **Update docs**: Type `ctx update` to sync CONTEXT.llm with code changes
 
 ## 💡 How It Works
 
@@ -104,6 +123,7 @@ The unified system provides comprehensive project management through a single sc
 - **Skylos Integration** - Built-in dead code analysis and cleanup
 - **Context Management** - Maintains project documentation and structure awareness
 - **Command Shortcuts** - Simple aliases for all operations
+- **Component Documentation** - CONTEXT.llm files for each module (50-70% token reduction)
 
 ### Workflow:
 1. **Start session**: `python3 install-claude-context.py sync`
@@ -217,6 +237,12 @@ A: Yes! It supports hierarchical contexts and can import parent CLAUDE.md files.
 
 **Q: What if I already have a complex CLAUDE.md?**  
 A: The hybrid installer preserves all your existing content and adds command mappings at the top. Your documentation stays intact.
+
+**Q: What are CONTEXT.llm files?**  
+A: Compact, LLM-optimized documentation files that describe each module's purpose, interface, and behavior. They use 50-70% fewer tokens than traditional docs and are automatically maintained by Claude.
+
+**Q: Do I need to manually create CONTEXT.llm files?**  
+A: No! Run `ctx init --auto` after installation to create them for all modules. Claude will then automatically create/update them as you work.
 
 ## 🚨 Troubleshooting
 
