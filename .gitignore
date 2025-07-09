@@ -1,3 +1,4 @@
 .claude
 CLAUDE.md
 CLAUDE_backup_*
+__pycache__/
