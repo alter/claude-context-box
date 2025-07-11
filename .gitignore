@@ -1,4 +1,5 @@
 .claude
 CLAUDE.md
+PROJECT.llm
 CLAUDE_backup_*
 __pycache__/
