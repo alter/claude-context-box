@@ -1,6 +1,6 @@
 # Claude Context Box
 
-A lightweight project context management system for Claude AI that helps maintain consistent coding standards and project structure awareness.
+A lightweight project context management system for Claude AI that helps maintain consistent coding standards and project structure awareness through automated documentation and intelligent command shortcuts.
 
 ## 🚀 Features
 
@@ -33,6 +33,8 @@ python3 install-claude-context.py
 # For non-interactive mode (auto-confirms updates)
 python3 install-claude-context.py -y
 ```
+
+> **Latest Version**: Updated 2025-07-11 with enhanced context management and streamlined installation process.
 
 ### Post-Installation Setup (IMPORTANT!)
 
