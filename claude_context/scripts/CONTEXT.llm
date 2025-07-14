@@ -1,0 +1,54 @@
+@component: Scripts
+@type: module
+@deps: []
+@purpose: [Add module purpose]
+
+@interface:
+- class ProcedureValidator
+  - log_step()
+  - check_procedure_compliance()
+  - validate_control_points()
+  - check_last_change()
+  - generate_report()
+- venv_check()
+- log_action()
+- get_python_info()
+- should_exclude()
+- find_modules()
+- analyze_dependencies()
+- create_project_llm()
+- create_format_md()
+- analyze_python_file()
+- generate_context_llm()
+- create_missing_contexts()
+- update_existing_contexts()
+- apply_claude_rules()
+- create_baseline_test_for_module()
+- create_missing_baseline_tests()
+- analyze_project_state()
+- validate_project_health()
+- main()
+- venv_check()
+- main()
+- venv_check()
+- find_unused_imports()
+- find_unused_functions()
+- scan_project()
+- interactive_cleanup()
+- main()
+- venv_check()
+- analyze_python_file()
+- generate_context_llm()
+- init_contexts()
+- update_contexts()
+- scan_missing()
+- main()
+- venv_check()
+- main()
+- venv_check()
+- main()
+
+@behavior:
+- [Add key behavior]
+- [Add error handling]
+- [Add performance notes]

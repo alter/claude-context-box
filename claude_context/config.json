@@ -1,0 +1,25 @@
+{
+  "version": "0.1.0",
+  "min_python": "3.7",
+  "scripts": [
+    "update.py",
+    "check.py",
+    "help.py",
+    "context.py",
+    "baseline.py",
+    "validation.py",
+    "cleancode.py"
+  ],
+  "templates": [
+    "prompt.md",
+    "claude.md",
+    "context.llm",
+    "project.llm"
+  ],
+  "directories": [
+    ".claude",
+    ".claude/core",
+    ".claude/plugins",
+    ".claude/templates"
+  ]
+}

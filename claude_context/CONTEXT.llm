@@ -1,0 +1,26 @@
+@component: ClaudeContext
+@type: module
+@deps: []
+@purpose: [Add module purpose]
+
+@interface:
+- class ClaudeContextInstaller
+  - run()
+  - check_existing_installation()
+  - backup_existing()
+  - setup_venv()
+  - download_template()
+  - install_core_files()
+  - create_claude_md()
+  - create_initial_project_llm()
+  - run_initial_update()
+  - get_basic_claude_template()
+  - get_embedded_prompt()
+  - get_embedded_scripts()
+- main()
+- main()
+
+@behavior:
+- [Add key behavior]
+- [Add error handling]
+- [Add performance notes]

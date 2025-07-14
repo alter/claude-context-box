@@ -1,153 +1,194 @@
-# Claude Context Box
+# Claude Context Box v2
 
-A lightweight project context management system for Claude AI that helps maintain consistent coding standards and project structure awareness through automated documentation and intelligent command shortcuts.
+A modern context management system for Claude AI that enforces coding standards and maintains deep project understanding.
 
-## 🚀 Features
+## 🚀 Quick Install
 
-### Core Features
-- **Smart Installation** - Preserves existing documentation when updating
-- **Conflict Detection** - Identifies naming conflicts and duplicate directories
-- **Python Environment Tracking** - Monitors virtual environment status and dependencies
-- **Dead Code Analysis** - Integrated Skylos tool for code cleanup
-- **Quick Commands** - Single-letter shortcuts for all common operations
-- **Component Documentation** - Auto-generates CONTEXT.llm files for all modules (50-70% fewer tokens)
-
-### What It Does
-- **Creates .claude/ directory** - Contains all management scripts
-- **Generates CLAUDE.md** - Comprehensive rules and command mappings for Claude
-- **Maintains context files** - Auto-generated project structure and warnings
-- **Enforces standards** - No comments in code, English only, unified approach
-- **Auto-documents modules** - CONTEXT.llm files for component architecture
-
-
-## 📦 Installation
-
-### Quick Start
+### Method 1: Curl Install (Recommended)
 ```bash
-# Download the installer
-curl -O https://raw.githubusercontent.com/alter/claude-context-box/main/install-claude-context.py
-
-# Run in your project directory
-python3 install-claude-context.py
-
-# For non-interactive mode (auto-confirms updates)
-python3 install-claude-context.py -y
+curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
 ```
 
-> **Latest Version**: Updated 2025-07-11 with enhanced context management and streamlined installation process.
-
-### Post-Installation Setup (IMPORTANT!)
-
-After installation, initialize component documentation:
+### Method 2: Manual Install
 ```bash
-# In Claude, type these commands:
-ctx init --auto    # Creates CONTEXT.llm for all modules
-u                  # Updates project context
+# Download installer
+curl -O https://raw.githubusercontent.com/alter/claude-context-box/main/install.py
+
+# Run installation
+python3 install.py
 ```
 
-This creates compact, LLM-optimized documentation for your entire codebase that Claude will automatically use.
+### Method 3: From Source
+```bash
+git clone https://github.com/alter/claude-context-box.git
+cd claude-context-box
+python3 install.py
+```
 
-### What Happens During Installation
+## 📦 Installation Options
 
-- If CLAUDE.md doesn't exist: Creates fresh installation
-- If CLAUDE.md exists: Asks to update (preserves your documentation)
-- Always creates backup with timestamp
-- Updates all scripts to latest version
+Use environment variables to customize installation:
 
-### Files Created
+```bash
+# Install specific version
+curl -sSL ... | CLAUDE_VERSION=v0.1.0 python3 -
 
+# Custom installation directory
+curl -sSL ... | CLAUDE_HOME=/path/to/project python3 -
+
+# Skip virtual environment creation
+curl -sSL ... | CLAUDE_NO_VENV=1 python3 -
+
+# Force reinstall
+curl -sSL ... | CLAUDE_FORCE=1 python3 -
+
+# Uninstall
+curl -sSL ... | CLAUDE_UNINSTALL=1 python3 -
+```
+
+## ⚡ Quick Commands
+
+After installation, use these commands in Claude:
+
+| Command | Description |
+|---------|-------------|
+| `u` | Universal update (does EVERYTHING!) |
+| `c` | Quick health check |
+| `s` | Show project structure |
+| `h` | Help with all commands |
+| `baseline <module>` | Create baseline tests |
+| `ctx init` | Initialize CONTEXT.llm files |
+| `ctx update` | Update existing CONTEXT.llm |
+| `cc` | Interactive dead code cleanup |
+| `validate` | Check procedure compliance |
+| `test-all` | Run all baseline tests |
+
+## 🎯 Core Features
+
+### 🛡️ 9-Step Safety Procedure
+Mandatory procedure for ANY code changes:
+1. Read PROJECT.llm
+2. Find target module
+3. Read module CONTEXT.llm
+4. Analyze current code
+5. Create baseline tests
+6. Run baseline tests
+7. Make minimal changes
+8. Test again (STOP if fails)
+9. Update contexts
+
+### 📋 Context Management
+- **CONTEXT.llm** - Automatic documentation for every module
+- **PROJECT.llm** - Architecture and dependency tracking
+- **CLAUDE.md** - Project rules and instructions for Claude
+
+### 🧪 Baseline Testing
+Create snapshots before making changes:
+```bash
+baseline auth      # Create tests for auth module
+test-all          # Run all baseline tests
+```
+
+## 🏗️ Project Structure
+
+After installation:
 ```
 your-project/
-├── CLAUDE.md                 # Rules and commands for Claude
-└── .claude/
-    ├── update.py            # Updates project context
-    ├── check.py             # Checks for conflicts
-    ├── setup.sh             # Sets up Python environment
-    ├── help.py              # Shows available commands
-    ├── cleancode.py         # Dead code analysis
-    ├── context.py           # CONTEXT.llm management
-    ├── context.json         # Generated project structure
-    └── format.md            # Generated human-readable context
+├── .claude/           # Core scripts and tools
+│   ├── update.py      # Universal updater
+│   ├── check.py       # Health checker
+│   ├── context.py     # CONTEXT.llm manager
+│   ├── baseline.py    # Baseline test creator
+│   └── ...
+├── CLAUDE.md          # Project rules for Claude
+├── PROJECT.llm        # Project architecture
+└── venv/              # Virtual environment
 ```
 
-## 🎯 Quick Start
+## 🔄 Typical Workflow
 
-### In Claude Code Interface
-After installation, just type single letters for instant commands:
+1. **Start work**: Type `u` to update everything
+2. **Before changes**: Claude automatically follows the 9-step procedure
+3. **Code changes**: Make edits (Claude creates/updates CONTEXT.llm)
+4. **Cleanup**: Type `cc` for dead code cleanup
+5. **Check**: Type `c` to verify project health
 
+## 🎯 Core Principles
+
+1. **Priorities**: Stability First → Clean Code → DRY → KISS → SOLID
+2. Never modify without understanding
+3. Always test before and after changes
+4. Minimal changes only
+5. English-only, self-documenting code
+6. NO comments in code (use CONTEXT.llm instead)
+
+## 📚 CONTEXT.llm Files
+
+Each module gets a CONTEXT.llm file describing:
+- Component purpose and interface
+- Dependencies and state
+- Expected behavior and errors
+- Performance characteristics
+
+Example:
 ```
-h              # Show all available commands
-u              # Update project context  
-c              # Quick conflict check
-s              # Show project structure
-v              # Setup/check Python environment
-cc             # Interactive dead code cleanup
-ctx init       # Initialize CONTEXT.llm for all modules
-ctx update     # Update existing CONTEXT.llm files
-scan           # Find modules without documentation
-graph          # Show component dependency graph
+@component: UserAuthService
+@type: service
+@version: 2.1.0
+@deps: [models.User, utils.crypto]
+@purpose: Handle user authentication
+
+@interface:
+- authenticate(email: str, password: str) -> dict
+- create_session(user_id: str) -> str
+- validate_token(token: str) -> bool
+
+@behavior:
+- Passwords hashed with bcrypt
+- Sessions stored in Redis
+- Rate limiting on failed attempts
 ```
 
-### Command Line Usage
+## 🔄 Updating
+
 ```bash
-# Project management
-python3 claude-context.py help         # Show all commands
-python3 claude-context.py update       # Update project context
-python3 claude-context.py check        # Quick conflict check
-python3 claude-context.py sync         # Sync documentation
-
-# Dead code analysis
-python3 claude-context.py cleancode                    # Basic analysis
-python3 claude-context.py cleancode --interactive      # Guided cleanup
-python3 claude-context.py cleancode --dry-run          # Preview only
-python3 claude-context.py cleancode --confidence 80    # High confidence only
-
-# Legacy commands (still work)
-python3 .claude/update.py              # Direct context update
-python3 .claude/check.py               # Direct conflict check
-bash .claude/setup.sh                  # Python environment setup
+# Update to latest version
+curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | CLAUDE_FORCE=1 python3 -
 ```
 
-### Typical Workflow
-1. **Initial setup**: Type `ctx init --auto` to create component docs
-2. **Start session**: Type `u` in Claude Code to update context
-3. **Work on code** - make your changes (Claude auto-creates/updates CONTEXT.llm)
-4. **Clean up**: Type `cc` for interactive dead code cleanup
-5. **Check structure**: Type `s` to see project organization
-6. **Update docs**: Type `ctx update` to sync CONTEXT.llm with code changes
+## ⚠️ Important Rules
 
-## 💡 How It Works
+### ❌ FORBIDDEN without permission:
+- Modify existing code
+- Delete any files
+- Create new features
+- Refactor existing code
+- Change project structure
+- Install new packages
 
-The unified system provides comprehensive project management through a single script:
+### ✅ ALLOWED without permission:
+- Read any files
+- Create baseline tests
+- Run existing tests
+- Search codebase
+- Create backup files
+- Generate CONTEXT.llm files
 
-### Core Features:
-- **Project Analysis** - Automatically detects project type (new, organized, legacy/chaotic)
-- **Skylos Integration** - Built-in dead code analysis and cleanup
-- **Context Management** - Maintains project documentation and structure awareness
-- **Command Shortcuts** - Simple aliases for all operations
-- **Component Documentation** - CONTEXT.llm files for each module (50-70% token reduction)
+## 🐍 Python Environment
 
-### Workflow:
-1. **Start session**: `python3 install-claude-context.py sync`
-2. **Make changes** to your code
-3. **Clean dead code**: `python3 install-claude-context.py cleancode --interactive`
-4. **End session**: `python3 install-claude-context.py sync`
-
-### Skylos Dead Code Analysis:
-The integrated Skylos scanner identifies:
-- 🔗 Unused imports
-- 🔧 Unused functions  
-- 🏗️ Unused classes
-- 📦 Unused variables
-
-### Confidence Levels:
-- **High (80-100%)** - Very likely safe to remove
-- **Medium (60-80%)** - Needs manual review
-- **Low (20-60%)** - Requires careful analysis
+The system automatically:
+- Creates virtual environment
+- Installs pytest
+- Tracks venv activation
+- Uses only python3 and pip3
 
 ## 🧹 Dead Code Cleanup (Skylos)
 
-The system includes Skylos for finding unused code:
+Integrated analyzer finds:
+- 🔗 Unused imports
+- 🔧 Unused functions
+- 🏗️ Unused classes
+- 📦 Unused variables
 
 ```bash
 # In Claude, just type:
@@ -157,162 +198,28 @@ cc
 python3 .claude/cleancode.py --interactive
 ```
 
-Skylos will be installed automatically on first use.
-
-## ⚠️ Conflict Prevention
-
-The system actively prevents common mistakes:
-
-- **Multiple config directories**: Warns if both `config/` and `configs/` exist
-- **Test directory conflicts**: Identifies when `test/` and `tests/` coexist  
-- **Singular/plural naming**: Detects `model/` vs `models/` conflicts
-
-Example warning:
-```
-⚠️ CRITICAL WARNINGS - READ FIRST!
-
-### 🔴 Config Conflict
-- **Issue**: Multiple config directories found: ['config', 'configs']
-- **REQUIRED ACTION**: Use 'config' as primary config directory
-- **DO NOT**: Create new directories without resolving this
-```
-
-## 🐍 Python Environment Integration
-
-The system tracks your Python environment:
-
-- Detects virtual environment location
-- Checks if venv is activated
-- Lists installed dependencies
-- Warns about missing requirements.txt
-
 ## 📋 Requirements
 
-- Python 3.6+
-- Works on macOS, Linux, and Windows
-- No external dependencies
-
-## 🔄 Updating
-
-To update an existing installation:
-
-1. Copy the `.claude` folder to a new project
-2. Run the installer again:
-```bash
-python3 install-claude-context.py
-```
+- Python 3.7+
+- macOS, Linux, or Windows
+- Git (for some features)
 
 ## 🤝 Contributing
 
-Contributions are welcome! The system is designed to be:
+1. Fork the repository
+2. Create your feature branch
+3. Follow the 9-step procedure
+4. Submit a pull request
 
-- **Language agnostic** - Easy to add support for new languages
-- **Extensible** - Simple to add new conflict detection rules
-- **Lightweight** - No external dependencies
+## 📄 License
 
-## 📝 License
+MIT License - use freely!
 
-MIT License - feel free to use in your projects!
+## 🔗 Links
 
-## 🙋 FAQ
-
-**Q: How does the hybrid installation work?**  
-A: It intelligently merges your existing CLAUDE.md with new command mappings, preserving all your project documentation while adding enhanced functionality.
-
-**Q: What's the difference between UPDATE and FRESH installation?**  
-A: UPDATE preserves your content and adds new features on top. FRESH replaces everything with the new structure (but creates a backup first).
-
-**Q: Does this work with all Claude Code features?**  
-A: Yes! It uses only official Claude Code mechanisms (CLAUDE.md and @ imports) and enhances them with command mappings.
-
-**Q: How much context does it use?**  
-A: Typically 200-400 tokens for project structure, compared to 50,000+ for full code dumps. Your existing CLAUDE.md content remains fully accessible.
-
-**Q: Can I customize what gets scanned?**  
-A: Yes! Edit the `ignore_patterns` in `.claude/update.py` to exclude specific files or directories.
-
-**Q: Does Skylos work with all Python projects?**  
-A: Skylos works with most Python codebases. It automatically installs if missing and provides confidence levels for safe cleanup.
-
-**Q: Does it work in monorepos?**  
-A: Yes! It supports hierarchical contexts and can import parent CLAUDE.md files. Each subproject can have its own context.
-
-**Q: What if I already have a complex CLAUDE.md?**  
-A: The hybrid installer preserves all your existing content and adds command mappings at the top. Your documentation stays intact.
-
-**Q: What are CONTEXT.llm files?**  
-A: Compact, LLM-optimized documentation files that describe each module's purpose, interface, and behavior. They use 50-70% fewer tokens than traditional docs and are automatically maintained by Claude.
-
-**Q: Do I need to manually create CONTEXT.llm files?**  
-A: No! Run `ctx init --auto` after installation to create them for all modules. Claude will then automatically create/update them as you work.
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**Installation fails:**
-1. Ensure Python 3.6+ is installed: `python3 --version`
-2. Check you're in the project root directory
-3. Verify write permissions: `ls -la`
-
-**Commands not working in Claude Code:**
-1. Check CLAUDE.md has command mappings at the top
-2. Look for "When I type `h` or `help`" section
-3. Re-run installer with UPDATE option
-
-**Skylos installation fails:**
-1. Check internet connection for git clone
-2. Ensure git is installed: `git --version`
-3. Try manual installation in virtual environment
-
-**Context not updating:**
-1. Run manual update: `python3 .claude/update.py`
-2. Check for errors: `python3 .claude/check.py`
-3. Verify file permissions: `ls -la .claude/`
-
-**Dead code cleanup removes needed code:**
-1. Always use `--dry-run` first to preview
-2. Start with `--confidence 80` for safety
-3. Use `--interactive` mode for control
-4. Test thoroughly after cleanup
-
-## 🌟 Pro Tips
-
-### Installation
-1. **Backup first**: Your CLAUDE.md is automatically backed up, but extra safety never hurts
-2. **Start with UPDATE**: It's safer and preserves all your existing documentation
-3. **Check the merge**: Review the merged CLAUDE.md to ensure everything looks correct
-
-### Daily Usage
-4. **Single letters in Claude**: Type `h`, `u`, `c`, `s`, `v`, `cc` for instant commands
-5. **Context workflow**: Always run `u` (update) before major coding sessions
-6. **Conflict resolution**: Address warnings from `c` (check) before creating new directories
-
-### Dead Code Cleanup
-7. **Preview first**: Always use `--dry-run` to see what will be removed
-8. **Interactive mode**: Use `--interactive` for guided, safer cleanup
-9. **Start conservative**: Begin with `--confidence 80` for high-confidence items only
-10. **Test after cleanup**: Run your tests after removing dead code
-11. **Regular maintenance**: Use `cc` command weekly to prevent code bloat
-
-### Project Organization
-12. **Resolve conflicts early**: Fix directory naming conflicts as soon as they're detected
-13. **Keep documentation**: Add `.claude/reports/` to `.gitignore` but commit `CLAUDE.md`
-14. **Use in monorepos**: Each subproject can have its own Claude Context Box setup
-
-## 📋 Command Reference
-
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `help` | `h` | Show all commands |
-| `sync` | `sy` | Sync documentation and context |
-| `update` | `u` | Update project context |
-| `check` | `c` | Quick conflict check |
-| `modules` | `m` | List modules with status |
-| `brief` | `b` | Show PROJECT_BRIEF.md |
-| `structure` | `s` | Show project structure |
-| `cleancode` | `cc` | Clean code using Skylos |
-| `install` | - | Install/setup system |
+- [GitHub Repository](https://github.com/alter/claude-context-box)
+- [Issue Tracker](https://github.com/alter/claude-context-box/issues)
+- [Discussions](https://github.com/alter/claude-context-box/discussions)
 
 ---
 
