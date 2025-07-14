@@ -1,9 +1,26 @@
-@component: ClaudeContext
-@type: module
+@component: claude_context
+@type: core_package
+@version: 0.1.0
 @deps: []
-@purpose: [Add module purpose]
+@purpose: Core context management system for Claude AI development
 
-\n@interface:\n- class ClaudeContextInstaller\n  - run()\n  - check_existing_installation()\n  - backup_existing()\n  - setup_venv()\n  - download_template()\n  - install_core_files()\n  - create_claude_md()\n  - create_initial_project_llm()\n  - run_initial_update()\n  - get_basic_claude_template()\n  - get_embedded_prompt()\n  - get_embedded_scripts()\n- main()\n- main()\n@behavior:
-- [Add key behavior]
-- [Add error handling]
-- [Add performance notes]
+\n\n@interface:\n- class ClaudeContextInstaller\n  - run()\n  - check_existing_installation()\n  - backup_existing()\n  - setup_venv()\n  - download_template()\n  - install_core_files()\n  - create_claude_md()\n  - create_initial_project_llm()\n  - run_initial_update()\n  - get_basic_claude_template()\n  - get_embedded_prompt()\n  - get_embedded_scripts()\n- main()\n- main()\n@behavior:
+- Provides automated installation with backup safety
+- Creates virtual environment and installs dependencies
+- Downloads and installs core template files
+- Generates initial project structure
+- Offers CLI commands for context management
+- Embeds templates and scripts for offline operation
+- Maintains backwards compatibility during updates
+
+@errors:
+- InstallationError: Failed setup or missing permissions
+- TemplateError: Template download or generation failed
+- ConfigurationError: Invalid project configuration
+- VersionError: Incompatible Python version
+
+@performance:
+- Installation: 15-30 seconds depending on network
+- CLI startup: <1 second
+- Template generation: <5 seconds
+- Context scanning: Variable based on project size
