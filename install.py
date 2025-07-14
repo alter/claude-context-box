@@ -134,14 +134,28 @@ def install_package(python_exe, config):
     """Install Claude Context Box package"""
     print_colored("📦 Installing Claude Context Box...", Colors.BLUE)
     
-    if config['version'] == 'latest':
-        install_cmd = f"{python_exe} -m pip install {PACKAGE_NAME}"
-    else:
-        install_cmd = f"{python_exe} -m pip install {PACKAGE_NAME}=={config['version']}"
-    
-    if not run_command(install_cmd, config['home'], capture=False):
-        print_colored("❌ Package installation failed", Colors.RED)
-        sys.exit(1)
+    # Clone the repository to a temporary directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        print_colored("📥 Cloning repository...", Colors.BLUE)
+        clone_cmd = f"git clone https://github.com/{GITHUB_REPO}.git {temp_dir}/claude-context-box"
+        
+        if not run_command(clone_cmd, capture=False):
+            print_colored("❌ Failed to clone repository", Colors.RED)
+            sys.exit(1)
+        
+        # Checkout specific version if requested
+        if config['version'] != 'latest':
+            checkout_cmd = f"git checkout {config['version']}"
+            if not run_command(checkout_cmd, f"{temp_dir}/claude-context-box", capture=False):
+                print_colored(f"❌ Failed to checkout version {config['version']}", Colors.RED)
+                sys.exit(1)
+        
+        # Install from source
+        install_cmd = f"{python_exe} -m pip install {temp_dir}/claude-context-box"
+        
+        if not run_command(install_cmd, config['home'], capture=False):
+            print_colored("❌ Package installation failed", Colors.RED)
+            sys.exit(1)
     
     print_colored("✅ Package installed successfully", Colors.GREEN)
 
