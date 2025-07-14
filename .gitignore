@@ -9,9 +9,8 @@ CLAUDE_backup_*
 # Test files
 test_baseline_*.py
 
-# Install scripts (not needed in public repo)
+# Install scripts (keep install.py for public access)
 install-claude-context.py
-install.py
 
 # Documentation drafts
 README_v2.md

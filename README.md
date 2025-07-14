@@ -4,42 +4,49 @@ A modern context management system for Claude AI that enforces coding standards 
 
 ## 🚀 Quick Install
 
-### Method 1: pip Install (Recommended)
+### Method 1: One-Command Install (Recommended)
+```bash
+curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
+```
+
+### Method 2: pip Install
 ```bash
 pip install claude-context-box
 ```
 
-### Method 2: From Source
+### Method 3: From Source
 ```bash
 git clone https://github.com/alter/claude-context-box.git
 cd claude-context-box
 pip install .
 ```
 
-### Method 3: Development Install
-```bash
-git clone https://github.com/alter/claude-context-box.git
-cd claude-context-box
-pip install -e .
-```
+## 📦 Installation Options
 
-## 📦 After Installation
-
-After installing, initialize your project:
+Customize installation with environment variables:
 
 ```bash
-# Initialize Claude Context Box in your project
-claude-context init
+# Install specific version
+curl -sSL ... | CLAUDE_VERSION=v0.1.0 python3 -
 
-# Or use short alias
-ccb init
+# Custom installation directory
+curl -sSL ... | CLAUDE_HOME=/path/to/project python3 -
+
+# Skip virtual environment creation
+curl -sSL ... | CLAUDE_NO_VENV=1 python3 -
+
+# Force reinstall
+curl -sSL ... | CLAUDE_FORCE=1 python3 -
+
+# Uninstall
+curl -sSL ... | CLAUDE_UNINSTALL=1 python3 -
 ```
 
-This creates:
-- `.claude/` directory with tools
-- `CLAUDE.md` with project rules
-- `PROJECT.llm` with architecture
-- Virtual environment (if needed)
+The installer automatically:
+- Creates virtual environment
+- Installs claude-context-box package
+- Initializes project structure
+- Creates `.claude/` tools directory
 
 ## ⚡ Quick Commands
 
@@ -148,7 +155,7 @@ Example:
 
 ```bash
 # Update to latest version
-pip install --upgrade claude-context-box
+curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | CLAUDE_FORCE=1 python3 -
 ```
 
 ## ⚠️ Important Rules
