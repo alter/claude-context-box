@@ -3,24 +3,7 @@
 @deps: []
 @purpose: [Add module purpose]
 
-@interface:
-- class ClaudeContextInstaller
-  - run()
-  - check_existing_installation()
-  - backup_existing()
-  - setup_venv()
-  - download_template()
-  - install_core_files()
-  - create_claude_md()
-  - create_initial_project_llm()
-  - run_initial_update()
-  - get_basic_claude_template()
-  - get_embedded_prompt()
-  - get_embedded_scripts()
-- main()
-- main()
-
-@behavior:
+\n@interface:\n- class ClaudeContextInstaller\n  - run()\n  - check_existing_installation()\n  - backup_existing()\n  - setup_venv()\n  - download_template()\n  - install_core_files()\n  - create_claude_md()\n  - create_initial_project_llm()\n  - run_initial_update()\n  - get_basic_claude_template()\n  - get_embedded_prompt()\n  - get_embedded_scripts()\n- main()\n- main()\n@behavior:
 - [Add key behavior]
 - [Add error handling]
 - [Add performance notes]
