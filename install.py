@@ -68,21 +68,35 @@ def get_env_config():
     return config
 
 def run_command(cmd, cwd=None, capture=True):
-    """Run shell command with error handling"""
+    """Run shell command with error handling. Returns result object on success, None on failure."""
+    print_colored(f"▶️  Executing: {cmd}", Colors.BLUE)
     try:
+        # Always capture output to provide debug info on failure.
         result = subprocess.run(
-            cmd, 
-            shell=True, 
+            cmd,
+            shell=True,
             cwd=cwd,
-            capture_output=capture,
+            capture_output=True,
             text=True,
-            check=True
+            check=True,
+            encoding='utf-8'
         )
-        return result.stdout if capture else None
+        # If the original call didn't want to capture, we can print stdout
+        # to simulate the non-captured behavior.
+        if not capture and result.stdout:
+            print(result.stdout.strip())
+        
+        return result
     except subprocess.CalledProcessError as e:
-        print_colored(f"❌ Command failed: {cmd}", Colors.RED)
-        if capture and e.stderr:
-            print_colored(f"Error: {e.stderr}", Colors.RED)
+        print_colored(f"❌ Command failed with exit code {e.returncode}: {cmd}", Colors.RED)
+        if e.stdout:
+            print_colored("------- STDOUT -------", Colors.YELLOW)
+            print(e.stdout.strip())
+            print_colored("----------------------", Colors.YELLOW)
+        if e.stderr:
+            print_colored("------- STDERR -------", Colors.RED)
+            print(e.stderr.strip())
+            print_colored("----------------------", Colors.RED)
         return None
 
 def check_existing_installation(config):
@@ -137,21 +151,21 @@ def install_package(python_exe, config):
     # Clone the repository to a temporary directory
     with tempfile.TemporaryDirectory() as temp_dir:
         print_colored("📥 Cloning repository...", Colors.BLUE)
-        clone_cmd = f"git clone https://github.com/{GITHUB_REPO}.git {temp_dir}/claude-context-box"
+        clone_cmd = f"git clone https://github.com/{GITHUB_REPO}.git {temp_dir}"
         
-        if not run_command(clone_cmd, capture=False):
+        if not run_command(clone_cmd, capture=True):
             print_colored("❌ Failed to clone repository", Colors.RED)
             sys.exit(1)
         
         # Checkout specific version if requested
         if config['version'] != 'latest':
             checkout_cmd = f"git checkout {config['version']}"
-            if not run_command(checkout_cmd, f"{temp_dir}/claude-context-box", capture=False):
+            if not run_command(checkout_cmd, temp_dir, capture=False):
                 print_colored(f"❌ Failed to checkout version {config['version']}", Colors.RED)
                 sys.exit(1)
         
         # Install from source
-        install_cmd = f"{python_exe} -m pip install {temp_dir}/claude-context-box"
+        install_cmd = f"{python_exe} -m pip install {temp_dir}"
         
         if not run_command(install_cmd, config['home'], capture=False):
             print_colored("❌ Package installation failed", Colors.RED)
