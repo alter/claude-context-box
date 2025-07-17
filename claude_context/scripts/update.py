@@ -38,6 +38,14 @@ EXCLUDE_PATTERNS = {
 
 def venv_check():
     """Check if running in virtual environment"""
+    # Try to import venv_utils
+    try:
+        from venv_utils import venv_check as vc
+        return vc()
+    except ImportError:
+        pass
+    
+    # Fallback implementation
     # Check if VIRTUAL_ENV environment variable is set (most reliable)
     if os.environ.get('VIRTUAL_ENV'):
         return True

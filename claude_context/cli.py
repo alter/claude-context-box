@@ -4,10 +4,30 @@ CLI interface for Claude Context Box
 """
 
 import sys
+import json
 import argparse
 import subprocess
 from pathlib import Path
 from .installer import ClaudeContextInstaller
+
+def get_python_executable(target_dir):
+    """Get Python executable from venv_info.json or fallback to system Python"""
+    venv_info_file = target_dir / '.claude' / 'venv_info.json'
+    
+    if venv_info_file.exists():
+        try:
+            with open(venv_info_file, 'r') as f:
+                venv_info = json.load(f)
+                return venv_info['python']
+        except:
+            pass
+    
+    # Fallback to old behavior
+    venv_python = target_dir / 'venv' / 'bin' / 'python3'
+    if not venv_python.exists():
+        venv_python = target_dir / 'venv' / 'Scripts' / 'python.exe'
+    
+    return str(venv_python) if venv_python.exists() else sys.executable
 
 def main():
     """Main CLI entry point"""
@@ -75,12 +95,8 @@ Quick commands (after init):
             print("   Run: claude-context init")
             return 1
         
-        # Check for venv
-        venv_python = target_dir / 'venv' / 'bin' / 'python3'
-        if not venv_python.exists():
-            venv_python = target_dir / 'venv' / 'Scripts' / 'python.exe'
-        
-        python_exe = str(venv_python) if venv_python.exists() else sys.executable
+        # Get Python executable from venv info
+        python_exe = get_python_executable(target_dir)
         
         result = subprocess.run([python_exe, str(update_script)], cwd=target_dir)
         return result.returncode
@@ -95,12 +111,8 @@ Quick commands (after init):
             print("   Run: claude-context init")
             return 1
         
-        # Check for venv
-        venv_python = target_dir / 'venv' / 'bin' / 'python3'
-        if not venv_python.exists():
-            venv_python = target_dir / 'venv' / 'Scripts' / 'python.exe'
-        
-        python_exe = str(venv_python) if venv_python.exists() else sys.executable
+        # Get Python executable from venv info
+        python_exe = get_python_executable(target_dir)
         
         result = subprocess.run([python_exe, str(check_script)], cwd=target_dir)
         return result.returncode

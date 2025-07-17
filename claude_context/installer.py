@@ -95,37 +95,215 @@ class ClaudeContextInstaller:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dst)
     
+    def find_existing_venvs(self):
+        """Find all existing virtual environments in the project"""
+        venvs = []
+        
+        # Find all activate scripts
+        activate_scripts = []
+        for root, dirs, files in os.walk(self.install_dir):
+            if 'activate' in files:
+                activate_path = Path(root) / 'activate'
+                if activate_path.is_file():
+                    activate_scripts.append(activate_path)
+        
+        for activate_script in activate_scripts:
+            venv_path = activate_script.parent.parent  # bin/activate -> venv/
+            python_exe = venv_path / 'bin' / 'python3'
+            if not python_exe.exists():
+                python_exe = venv_path / 'Scripts' / 'python.exe'
+            
+            if python_exe.exists():
+                # Test if it's a valid Python environment
+                try:
+                    result = subprocess.run(
+                        [str(python_exe), '--version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    if result.returncode == 0:
+                        venvs.append({
+                            'path': venv_path,
+                            'python': python_exe,
+                            'activate': activate_script,
+                            'version': result.stdout.strip()
+                        })
+                except:
+                    continue
+        
+        return venvs
+
+    def detect_project_type(self):
+        """Detect project type and dependency management"""
+        project_info = {
+            'type': 'standard',
+            'has_poetry': False,
+            'has_requirements': False,
+            'has_pyproject': False
+        }
+        
+        # Check for Poetry
+        if (self.install_dir / 'pyproject.toml').exists():
+            project_info['has_pyproject'] = True
+            try:
+                with open(self.install_dir / 'pyproject.toml', 'r') as f:
+                    content = f.read()
+                    if '[tool.poetry]' in content:
+                        project_info['type'] = 'poetry'
+                        project_info['has_poetry'] = True
+            except:
+                pass
+        
+        # Check for requirements.txt
+        if (self.install_dir / 'requirements.txt').exists():
+            project_info['has_requirements'] = True
+        
+        return project_info
+
     def setup_venv(self):
-        """Setup Python virtual environment"""
-        venv_path = self.install_dir / 'venv'
+        """Setup Python virtual environment - use existing or create new"""
+        print("🔍 Scanning for existing virtual environments...")
         
-        if venv_path.exists():
-            print("✅ Virtual environment already exists")
-            return
+        # Find existing venvs
+        existing_venvs = self.find_existing_venvs()
+        project_info = self.detect_project_type()
         
-        print("📦 Creating virtual environment...")
-        result = subprocess.run(
-            [sys.executable, '-m', 'venv', 'venv'],
-            cwd=self.install_dir,
-            capture_output=True,
-            text=True
-        )
-        
-        if result.returncode == 0:
-            print("  ✅ Virtual environment created")
+        if existing_venvs:
+            print(f"📦 Found {len(existing_venvs)} existing virtual environment(s):")
+            for i, venv in enumerate(existing_venvs):
+                rel_path = venv['path'].relative_to(self.install_dir)
+                print(f"  {i+1}. {rel_path} ({venv['version']})")
             
-            # Install basic packages
-            pip_cmd = str(venv_path / 'bin' / 'pip')
-            if not Path(pip_cmd).exists():
-                pip_cmd = str(venv_path / 'Scripts' / 'pip.exe')
+            # Prefer .venv over venv for Poetry projects
+            selected_venv = existing_venvs[0]
+            if project_info['has_poetry']:
+                for venv in existing_venvs:
+                    if venv['path'].name == '.venv':
+                        selected_venv = venv
+                        break
             
-            if Path(pip_cmd).exists():
-                print("  📦 Installing packages...")
-                subprocess.run([pip_cmd, 'install', '--upgrade', 'pip'], capture_output=True)
-                subprocess.run([pip_cmd, 'install', 'pytest'], capture_output=True)
-                print("  ✅ Packages installed")
+            # Save venv info for other scripts
+            venv_info = {
+                'path': str(selected_venv['path']),
+                'python': str(selected_venv['python']),
+                'activate': str(selected_venv['activate']),
+                'type': project_info['type']
+            }
+            
+            # Create .claude directory and save venv info
+            self.claude_dir.mkdir(exist_ok=True)
+            with open(self.claude_dir / 'venv_info.json', 'w') as f:
+                json.dump(venv_info, f, indent=2)
+            
+            rel_path = selected_venv['path'].relative_to(self.install_dir)
+            print(f"✅ Using existing virtual environment: {rel_path}")
+            
+            # Install packages in existing venv
+            self.install_packages_in_venv(selected_venv, project_info)
+            
         else:
-            print(f"  ⚠️  Failed to create venv: {result.stderr}")
+            # Create new venv
+            print("📦 Creating new virtual environment...")
+            if project_info['has_poetry']:
+                venv_path = self.install_dir / '.venv'
+                print("  🎭 Poetry project detected - creating .venv/")
+            else:
+                venv_path = self.install_dir / 'venv'
+                print("  📦 Standard project - creating venv/")
+            
+            result = subprocess.run(
+                [sys.executable, '-m', 'venv', str(venv_path)],
+                cwd=self.install_dir,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                print("  ✅ Virtual environment created")
+                
+                # Find python executable in new venv
+                python_exe = venv_path / 'bin' / 'python3'
+                if not python_exe.exists():
+                    python_exe = venv_path / 'Scripts' / 'python.exe'
+                
+                # Save venv info
+                venv_info = {
+                    'path': str(venv_path),
+                    'python': str(python_exe),
+                    'activate': str(venv_path / 'bin' / 'activate'),
+                    'type': project_info['type']
+                }
+                
+                self.claude_dir.mkdir(exist_ok=True)
+                with open(self.claude_dir / 'venv_info.json', 'w') as f:
+                    json.dump(venv_info, f, indent=2)
+                
+                # Install packages
+                fake_venv = {
+                    'path': venv_path,
+                    'python': python_exe,
+                    'activate': venv_path / 'bin' / 'activate'
+                }
+                self.install_packages_in_venv(fake_venv, project_info)
+                
+            else:
+                print(f"  ⚠️  Failed to create venv: {result.stderr}")
+
+    def install_packages_in_venv(self, venv, project_info):
+        """Install packages in the virtual environment"""
+        if project_info['has_poetry']:
+            print("  🎭 Poetry project detected - using poetry install")
+            # Try to install with poetry
+            try:
+                result = subprocess.run(
+                    ['poetry', 'install'],
+                    cwd=self.install_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if result.returncode == 0:
+                    print("  ✅ Poetry packages installed")
+                    
+                    # Add pytest if not in pyproject.toml
+                    result = subprocess.run(
+                        ['poetry', 'add', '--group', 'dev', 'pytest'],
+                        cwd=self.install_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if result.returncode == 0:
+                        print("  ✅ Added pytest to dev dependencies")
+                    
+                    return
+                else:
+                    print(f"  ⚠️  Poetry install failed: {result.stderr}")
+            except:
+                print("  ⚠️  Poetry not available or failed")
+        
+        # Fallback to pip
+        pip_cmd = str(venv['python']).replace('python3', 'pip3').replace('python.exe', 'pip.exe')
+        if not Path(pip_cmd).exists():
+            pip_cmd = str(venv['path'] / 'bin' / 'pip')
+            if not Path(pip_cmd).exists():
+                pip_cmd = str(venv['path'] / 'Scripts' / 'pip.exe')
+        
+        if Path(pip_cmd).exists():
+            print("  📦 Installing packages with pip...")
+            subprocess.run([pip_cmd, 'install', '--upgrade', 'pip'], capture_output=True)
+            subprocess.run([pip_cmd, 'install', 'pytest'], capture_output=True)
+            
+            # Install from requirements.txt if exists
+            if project_info['has_requirements']:
+                print("  📋 Installing from requirements.txt...")
+                subprocess.run([pip_cmd, 'install', '-r', 'requirements.txt'], 
+                             capture_output=True, cwd=self.install_dir)
+            
+            print("  ✅ Packages installed")
+        else:
+            print("  ⚠️  Could not find pip executable")
     
     def download_template(self, template_name):
         """Download a template file"""
@@ -235,12 +413,18 @@ class ClaudeContextInstaller:
         """Run initial context update"""
         print("\n🔄 Running initial update...")
         
-        # Find Python executable
-        venv_python = self.install_dir / 'venv' / 'bin' / 'python3'
-        if not venv_python.exists():
-            venv_python = self.install_dir / 'venv' / 'Scripts' / 'python.exe'
+        # Get Python executable from saved venv info
+        python_exe = sys.executable  # fallback
         
-        python_exe = str(venv_python) if venv_python.exists() else sys.executable
+        venv_info_file = self.claude_dir / 'venv_info.json'
+        if venv_info_file.exists():
+            try:
+                with open(venv_info_file, 'r') as f:
+                    venv_info = json.load(f)
+                    python_exe = venv_info['python']
+                    print(f"  🐍 Using Python from: {venv_info['path']}")
+            except:
+                print("  ⚠️  Could not read venv info, using system Python")
         
         # Run update.py
         update_script = self.claude_dir / 'update.py'
