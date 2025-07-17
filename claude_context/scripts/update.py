@@ -102,6 +102,12 @@ def find_modules():
     """Find all code modules with structure"""
     modules = {}
     
+    # Additional system directories to exclude
+    SYSTEM_DIRS = {
+        '.claude_backup*', 'backup*', 'backups', '.backup*', 
+        'test_*', 'tests_*', 'testing', '.testing', '*backup*'
+    }
+    
     for root, dirs, files in os.walk('.'):
         # Filter directories
         dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
@@ -109,11 +115,26 @@ def find_modules():
         if should_exclude(root):
             continue
             
+        # Skip backup directories
+        if any(fnmatch.fnmatch(root, pattern) for pattern in SYSTEM_DIRS):
+            continue
+            
+        # Skip if path contains venv or other system dirs
+        path_parts = Path(root).parts
+        if any(part in EXCLUDE_DIRS for part in path_parts):
+            continue
+            
+        # Extra check: skip if path starts with venv or common system paths
+        rel_path = os.path.relpath(root)
+        if rel_path.startswith(('venv/', '.venv/', 'env/', '.env/', 
+                              'site-packages/', 'lib/', 'bin/', 'Scripts/',
+                              '.tox/', 'dist/', 'build/', '.git/')):
+            continue
+            
         # Check for code files
         py_files = [f for f in files if f.endswith('.py') and not should_exclude(f)]
         
         if py_files and root != '.':
-            rel_path = os.path.relpath(root)
             modules[rel_path] = {
                 'files': py_files,
                 'has_context': os.path.exists(os.path.join(root, 'CONTEXT.llm'))
@@ -250,7 +271,7 @@ def create_project_llm(modules, dependencies):
     content += "\\n\\n@test_coverage:"
     
     # Check for baseline tests
-    baseline_tests = list(Path('.').glob('test_baseline_*.py'))
+    baseline_tests = list(Path('tests').glob('test_baseline_*.py')) if Path('tests').exists() else []
     for module_path in sorted(modules.keys()):
         module_name = os.path.basename(module_path)
         has_baseline = any(t.name == f"test_baseline_{module_name}.py" for t in baseline_tests)
@@ -508,7 +529,12 @@ def apply_claude_rules():
 def create_baseline_test_for_module(module_path):
     """Create baseline test for a specific module"""
     module_name = os.path.basename(module_path)
-    test_filename = f"test_baseline_{module_name}.py"
+    
+    # Ensure tests directory exists
+    tests_dir = Path('tests')
+    tests_dir.mkdir(exist_ok=True)
+    
+    test_filename = f"tests/test_baseline_{module_name}.py"
     
     # Skip if test already exists
     if os.path.exists(test_filename):
@@ -623,7 +649,11 @@ def analyze_project_state():
                 break
     
     # Check for missing baseline tests
-    existing_baselines = set(p.stem.replace('test_baseline_', '') for p in Path('.').glob('test_baseline_*.py'))
+    tests_dir = Path('tests')
+    if tests_dir.exists():
+        existing_baselines = set(p.stem.replace('test_baseline_', '') for p in tests_dir.glob('test_baseline_*.py'))
+    else:
+        existing_baselines = set()
     missing_baseline_tests = [m for m in modules.keys() if os.path.basename(m) not in existing_baselines]
     
     return {
@@ -675,7 +705,6 @@ def main():
     total_tasks = (
         len(state['missing_contexts']) + 
         len(state['outdated_contexts']) + 
-        len(state['missing_baseline_tests']) + 
         2  # PROJECT.llm + rules
     )
     
@@ -714,13 +743,9 @@ def main():
     create_format_md()
     print("   ✅ .claude/format.md updated")
     
-    # 6. Create missing baseline tests
-    if state['missing_baseline_tests']:
-        print(f"\\n🧪 Step 5: Creating baseline tests for {len(state['missing_baseline_tests'])} modules...")
-        created_tests = create_missing_baseline_tests()
-        print(f"   ✅ Created {created_tests} baseline tests")
-    else:
-        print("\\n🧪 Step 5: All modules have baseline tests ✅")
+    # 6. Create missing baseline tests - SKIP during initial install
+    # Baseline tests should only be created when explicitly requested
+    print("\\n🧪 Step 5: Baseline tests - create with 'baseline <module>' command")
     
     # 7. Final health check
     print("\\n🏥 Step 6: Final project health check...")
@@ -736,7 +761,7 @@ def main():
     print(f"   - Modules: {state['total_modules']}")
     print(f"   - CONTEXT.llm files: ✅ All current")
     print(f"   - PROJECT.llm: ✅ Updated")
-    print(f"   - Baseline tests: ✅ Created as needed")
+    print(f"   - Baseline tests: Run 'baseline <module>' to create")
     print(f"   - CLAUDE.md rules: ✅ Applied")
     
     if not venv_check():
