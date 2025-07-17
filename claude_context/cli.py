@@ -11,23 +11,34 @@ from pathlib import Path
 from .installer import ClaudeContextInstaller
 
 def get_python_executable(target_dir):
-    """Get Python executable from venv_info.json or fallback to system Python"""
+    """Get Python executable from venv_info.json or detect automatically"""
     venv_info_file = target_dir / '.claude' / 'venv_info.json'
     
+    # Try to read saved venv info first
     if venv_info_file.exists():
         try:
             with open(venv_info_file, 'r') as f:
                 venv_info = json.load(f)
-                return venv_info['python']
+                python_path = Path(venv_info['python'])
+                if python_path.exists():
+                    return str(python_path)
         except:
             pass
     
-    # Fallback to old behavior
-    venv_python = target_dir / 'venv' / 'bin' / 'python3'
-    if not venv_python.exists():
-        venv_python = target_dir / 'venv' / 'Scripts' / 'python.exe'
+    # Auto-detect virtual environment
+    venv_candidates = [
+        target_dir / '.venv' / 'bin' / 'python3',      # Poetry/modern style
+        target_dir / '.venv' / 'Scripts' / 'python.exe', # Poetry Windows
+        target_dir / 'venv' / 'bin' / 'python3',       # Standard style
+        target_dir / 'venv' / 'Scripts' / 'python.exe'  # Standard Windows
+    ]
     
-    return str(venv_python) if venv_python.exists() else sys.executable
+    for candidate in venv_candidates:
+        if candidate.exists():
+            return str(candidate)
+    
+    # Fallback to system Python
+    return sys.executable
 
 def main():
     """Main CLI entry point"""

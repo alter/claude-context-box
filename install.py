@@ -67,7 +67,7 @@ def get_env_config():
     
     return config
 
-def run_command(cmd, cwd=None, capture=True):
+def run_command(cmd, cwd=None, capture=True, env=None):
     """Run shell command with error handling. Returns result object on success, None on failure."""
     print_colored(f"▶️  Executing: {cmd}", Colors.BLUE)
     try:
@@ -79,7 +79,8 @@ def run_command(cmd, cwd=None, capture=True):
             capture_output=True,
             text=True,
             check=True,
-            encoding='utf-8'
+            encoding='utf-8',
+            env=env
         )
         # If the original call didn't want to capture, we can print stdout
         # to simulate the non-captured behavior.
@@ -123,10 +124,53 @@ def setup_virtual_environment(config):
         print_colored("⏭️  Skipping virtual environment creation", Colors.YELLOW)
         return sys.executable
     
-    venv_dir = config['home'] / 'venv'
+    # Check for existing virtual environments first
+    print_colored("🔍 Checking for existing virtual environments...", Colors.BLUE)
     
-    if not venv_dir.exists():
-        print_colored("🐍 Creating virtual environment...", Colors.BLUE)
+    # Common venv paths to check
+    venv_candidates = [
+        config['home'] / '.venv',  # Poetry/modern style
+        config['home'] / 'venv',   # Traditional style
+        config['home'] / 'env',    # Alternative style
+    ]
+    
+    # Check if project uses Poetry
+    is_poetry_project = (config['home'] / 'pyproject.toml').exists()
+    if is_poetry_project:
+        try:
+            with open(config['home'] / 'pyproject.toml', 'r') as f:
+                content = f.read()
+                is_poetry_project = '[tool.poetry]' in content
+        except:
+            is_poetry_project = False
+    
+    # Find existing venv
+    existing_venv = None
+    for venv_path in venv_candidates:
+        if venv_path.exists():
+            # Check if it's a valid venv
+            if os.name == 'nt':
+                python_exe = venv_path / 'Scripts' / 'python.exe'
+            else:
+                python_exe = venv_path / 'bin' / 'python'
+            
+            if python_exe.exists():
+                existing_venv = venv_path
+                print_colored(f"✅ Found existing virtual environment: {venv_path.name}", Colors.GREEN)
+                break
+    
+    # Use existing venv or create new one
+    if existing_venv:
+        venv_dir = existing_venv
+    else:
+        # Create new venv
+        if is_poetry_project:
+            venv_dir = config['home'] / '.venv'
+            print_colored("🎭 Poetry project detected - creating .venv", Colors.BLUE)
+        else:
+            venv_dir = config['home'] / 'venv'
+            print_colored("📦 Creating standard venv", Colors.BLUE)
+        
         if not run_command(f"{sys.executable} -m venv {venv_dir}", config['home']):
             print_colored("❌ Failed to create virtual environment", Colors.RED)
             sys.exit(1)
@@ -177,13 +221,21 @@ def initialize_project(python_exe, config):
     """Initialize Claude Context Box in the project"""
     print_colored("🔧 Initializing project...", Colors.BLUE)
     
-    # Try to run initialization
-    init_cmd = f"{python_exe} -m claude_context.cli init"
-    result = run_command(init_cmd, config['home'], capture=False)
+    # Set environment variables for the installer
+    env = os.environ.copy()
+    env['CLAUDE_HOME'] = str(config['home'])
+    if config['force']:
+        env['CLAUDE_FORCE'] = '1'
+    if config['no_venv']:
+        env['CLAUDE_NO_VENV'] = '1'
+    
+    # Try to run initialization via Python module
+    init_cmd = f"{python_exe} -c \"from claude_context.installer import ClaudeContextInstaller; installer = ClaudeContextInstaller(); installer.run()\""
+    result = run_command(init_cmd, config['home'], capture=False, env=env)
     
     if result is None:
         print_colored("⚠️  Could not run auto-initialization", Colors.YELLOW)
-        print_colored("Run manually after installation: claude-context init", Colors.YELLOW)
+        print_colored("Run manually after installation: python -m claude_context.cli init", Colors.YELLOW)
     else:
         print_colored("✅ Project initialized", Colors.GREEN)
 

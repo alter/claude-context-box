@@ -415,6 +415,7 @@ find_related() {
 5. **Update contexts** - Keep CONTEXT.llm and PROJECT.llm current
 6. **Fail fast** - Stop immediately when tests fail
 7. **Explicit is better** - Clear function names over clever code
+8. **No Claude attribution** - Never add "Generated with Claude Code" or co-authorship
 
 ## ERROR RECOVERY
 

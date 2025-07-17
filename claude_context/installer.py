@@ -306,20 +306,13 @@ class ClaudeContextInstaller:
             print("  ⚠️  Could not find pip executable")
     
     def download_template(self, template_name):
-        """Download a template file"""
-        if self.base_url:
-            url = f"{self.base_url}/claude_context/templates/{template_name}"
-            try:
-                with urllib.request.urlopen(url) as response:
-                    return response.read().decode('utf-8')
-            except:
-                pass
-        
-        # Fallback to embedded templates
+        """Load template file from claude_context/templates/"""
+        # Load from claude_context/templates/ directory
         template_path = Path(__file__).parent / 'templates' / template_name
         if template_path.exists():
             return template_path.read_text(encoding='utf-8')
         
+        print(f"  ⚠️  Template {template_name} not found in claude_context/templates/")
         return None
     
     def install_core_files(self):
@@ -479,13 +472,13 @@ class ClaudeContextInstaller:
 Claude Context Box v{{ version }} - {{ timestamp }}"""
     
     def get_embedded_prompt(self):
-        """Get embedded prompt content"""
-        # Try local file first
+        """Get embedded prompt content from templates/"""
+        # Load from claude_context/templates/ directory
         local_path = Path(__file__).parent / 'templates' / 'prompt.md'
         if local_path.exists():
             return local_path.read_text(encoding='utf-8')
         
-        # Fallback to basic version
+        # Fallback to basic version if template not found
         return """# CLAUDE CONTEXT BOX SYSTEM PROMPT
 
 ## ROLE AND GOAL
@@ -514,32 +507,32 @@ You are a senior developer who:
 For ANY code modification, follow these steps EXACTLY..."""
     
     def get_embedded_scripts(self):
-        """Get embedded Python scripts"""
+        """Get embedded Python scripts from claude_context/scripts/"""
         scripts = {}
         
-        # Try to load from local files first
+        # Script names to install
         script_names = ['update.py', 'check.py', 'help.py', 'context.py', 
                        'baseline.py', 'validation.py', 'cleancode.py']
         
         for script_name in script_names:
-            # Try local file
+            # Load from claude_context/scripts/ directory
             local_path = Path(__file__).parent / 'scripts' / script_name
             if local_path.exists():
                 scripts[script_name] = local_path.read_text(encoding='utf-8')
-                continue
-            
-            # Try downloading
-            if self.base_url:
-                url = f"{self.base_url}/claude_context/scripts/{script_name}"
-                try:
-                    with urllib.request.urlopen(url) as response:
-                        scripts[script_name] = response.read().decode('utf-8')
-                        continue
-                except:
-                    pass
-            
-            # Fallback stub
-            scripts[script_name] = f'#!/usr/bin/env python3\n# {script_name} stub\nprint("{script_name} not found")'
+                print(f"  📄 Loading {script_name} from claude_context/scripts/")
+            else:
+                print(f"  ❌ Script {script_name} not found in claude_context/scripts/")
+                # Create minimal stub that shows the error
+                scripts[script_name] = f'''#!/usr/bin/env python3
+"""
+{script_name} - Claude Context Box Script
+ERROR: This script was not found during installation.
+"""
+import sys
+print("❌ Error: {script_name} not properly installed")
+print("   Please reinstall Claude Context Box")
+sys.exit(1)
+'''
         
         return scripts
 
