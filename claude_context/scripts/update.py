@@ -38,6 +38,19 @@ EXCLUDE_PATTERNS = {
 
 def venv_check():
     """Check if running in virtual environment"""
+    # Check if VIRTUAL_ENV environment variable is set (most reliable)
+    if os.environ.get('VIRTUAL_ENV'):
+        return True
+    
+    # Fallback: check if sys.prefix is different from sys.base_prefix
+    if hasattr(sys, 'base_prefix'):
+        return sys.prefix != sys.base_prefix
+    
+    # For older Python versions
+    if hasattr(sys, 'real_prefix'):
+        return True
+    
+    # Last resort: check for venv/virtualenv markers
     if not hasattr(sys, 'prefix'):
         return False
     return os.path.exists(os.path.join(sys.prefix, 'bin', 'activate')) or \
