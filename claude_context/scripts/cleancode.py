@@ -76,7 +76,7 @@ def scan_project():
     }
     
     for py_file in Path('.').rglob('*.py'):
-        if 'venv' in str(py_file) or '__pycache__' in str(py_file):
+        if any(x in str(py_file) for x in ['venv', '__pycache__', '.claude', 'build', 'dist', '.tox']):
             continue
         
         # Check file size

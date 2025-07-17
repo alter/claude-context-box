@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.3] - 2025-01-17
+
+### Changed
+- Added `.claude` directory to exclusion lists in all scripts (update.py, context.py, cleancode.py)
+- Scripts now properly ignore their own directory to prevent self-processing
+- Updated path filtering to exclude `.claude/` paths in find_modules()
+- Enhanced exclusion lists to also include common build directories (build, dist, .tox)
+
+### Added
+- Test suite for verifying .claude directory exclusion works correctly
+
 ## [0.1.2] - 2025-01-17
 
 ### Added

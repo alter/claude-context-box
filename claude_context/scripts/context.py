@@ -114,7 +114,7 @@ def init_contexts():
     
     for root, dirs, files in os.walk('.'):
         # Skip system directories
-        dirs[:] = [d for d in dirs if d not in {'venv', '__pycache__', '.git', 'node_modules'}]
+        dirs[:] = [d for d in dirs if d not in {'venv', '__pycache__', '.git', 'node_modules', '.claude', 'build', 'dist', '.tox'}]
         
         if any(f.endswith('.py') for f in files) and root != '.':
             context_path = os.path.join(root, 'CONTEXT.llm')
@@ -184,7 +184,7 @@ def scan_missing():
     missing = []
     
     for root, dirs, files in os.walk('.'):
-        dirs[:] = [d for d in dirs if d not in {'venv', '__pycache__', '.git', 'node_modules'}]
+        dirs[:] = [d for d in dirs if d not in {'venv', '__pycache__', '.git', 'node_modules', '.claude', 'build', 'dist', '.tox'}]
         
         if any(f.endswith('.py') for f in files) and root != '.':
             if not os.path.exists(os.path.join(root, 'CONTEXT.llm')):

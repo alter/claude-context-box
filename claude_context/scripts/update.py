@@ -27,7 +27,7 @@ EXCLUDE_DIRS = {
     'venv', '__pycache__', '.git', 'node_modules', '.pytest_cache',
     'htmlcov', 'dist', 'build', '*.egg-info', '.tox', '.mypy_cache',
     '.next', '.nuxt', 'coverage', '.nyc_output', 'tmp', 'temp',
-    'vendor', 'target', '.idea', '.vscode', '.fleet'
+    'vendor', 'target', '.idea', '.vscode', '.fleet', '.claude'
 }
 
 EXCLUDE_PATTERNS = {
@@ -136,7 +136,7 @@ def find_modules():
         rel_path = os.path.relpath(root)
         if rel_path.startswith(('venv/', '.venv/', 'env/', '.env/', 
                               'site-packages/', 'lib/', 'bin/', 'Scripts/',
-                              '.tox/', 'dist/', 'build/', '.git/')):
+                              '.tox/', 'dist/', 'build/', '.git/', '.claude/')):
             continue
             
         # Check for code files
