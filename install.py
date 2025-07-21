@@ -271,7 +271,7 @@ def print_success_message(config):
     if not config['no_venv']:
         print_colored("1. Activate virtual environment:", Colors.BLUE)
         if os.name == 'nt':
-            print(f"   .\\venv\\Scripts\\activate")
+            print(r"   .\venv\Scripts\activate")
         else:
             print(f"   source venv/bin/activate")
     
