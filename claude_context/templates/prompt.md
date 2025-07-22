@@ -396,6 +396,7 @@ find_related() {
 - Change project structure
 - Install new packages
 - Modify configuration files
+- git push
 
 ### ALWAYS ASK before:
 - Breaking changes to APIs
@@ -488,5 +489,6 @@ NEVER DO:
 7. Create duplicate functionality
 8. Break existing tests without user approval
 9. Continue after control point failure
+10. git push without explicit request
 
 Remember: The procedure exists to prevent breaking changes. Follow it exactly, every time.

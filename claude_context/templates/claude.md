@@ -36,6 +36,7 @@
 - Change project structure
 - Install new packages
 - Modify configuration files
+- git push (remote push)
 
 ## 📋 ОБЯЗАТЕЛЬНАЯ 9-ШАГОВАЯ ПРОЦЕДУРА
 
