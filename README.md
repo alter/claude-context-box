@@ -1,5 +1,12 @@
 # Claude Context Box v2
 
+## What's New in v0.2.0
+
+- **Simplified 7-step procedure** - Removed baseline tests in favor of practical verification
+- **Enhanced exclusion rules** - Better handling of virtual environments (.venv, venv, env, etc.)
+- **Git best practices** - No AI/Claude mentions in commits, respects user git config
+- **Practical verification** - Test scripts by running them, libraries by importing them
+
 A modern context management system for Claude AI that enforces coding standards and maintains deep project understanding.
 
 ## 🚀 Quick Install
@@ -58,25 +65,23 @@ After installation, use these commands in Claude:
 | `c` | Quick health check |
 | `s` | Show project structure |
 | `h` | Help with all commands |
-| `baseline <module>` | Create baseline tests |
 | `ctx init` | Initialize CONTEXT.llm files |
 | `ctx update` | Update existing CONTEXT.llm |
 | `cc` | Interactive dead code cleanup |
 | `validate` | Check procedure compliance |
-| `test-all` | Run all baseline tests |
+| `deps` | Show dependency graph |
 
 ## 🎯 Core Features
 
-### 🛡️ 9-Step Safety Procedure
+### 🛡️ 7-Step Safety Procedure
 Mandatory procedure for ANY code changes:
 1. Read PROJECT.llm
 2. Find target module
 3. Read module CONTEXT.llm
 4. Analyze current code
-5. Create baseline tests
-6. Run baseline tests
-7. Make minimal changes
-8. Test again (STOP if fails)
+5. Make minimal changes
+6. Verify changes (run scripts, import libraries, test endpoints)
+7. Update contexts
 9. Update contexts
 
 ### 📋 Context Management

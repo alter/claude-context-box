@@ -9,6 +9,37 @@ import re
 from pathlib import Path
 import ast
 import argparse
+import fnmatch
+
+# Configuration - same as update.py
+EXCLUDE_DIRS = {
+    # Virtual environments
+    'venv', '.venv', 'env', 'ENV', '.env',
+    
+    # Python cache
+    '__pycache__', '*.py[cod]',
+    
+    # Distribution/build
+    'build', 'dist', '*.egg-info', '.eggs',
+    
+    # Tool caches
+    '.mypy_cache', '.pytest_cache', '.cache', '.ipynb_checkpoints',
+    
+    # Testing and coverage
+    '.tox', '.coverage', 'htmlcov', 'coverage', '.nyc_output',
+    
+    # IDE and system configs
+    '.idea', '.vscode', '.fleet', '.DS_Store',
+    
+    # Version control
+    '.git', '.svn', '.hg',
+    
+    # Package managers
+    'node_modules', 'vendor',
+    
+    # Project specific
+    '.claude', '.next', '.nuxt', 'tmp', 'temp', 'target'
+}
 
 def venv_check():
     """Check if running in virtual environment"""
@@ -114,7 +145,35 @@ def init_contexts():
     
     for root, dirs, files in os.walk('.'):
         # Skip system directories
-        dirs[:] = [d for d in dirs if d not in {'venv', '__pycache__', '.git', 'node_modules', '.claude', 'build', 'dist', '.tox'}]
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+        
+        # Additional path validation
+        rel_path = os.path.relpath(root)
+        if any(part in EXCLUDE_DIRS for part in Path(root).parts):
+            continue
+            
+        # Skip if path starts with excluded directories
+        if rel_path.startswith((
+            # Virtual environments
+            'venv/', '.venv/', 'env/', 'ENV/', '.env/',
+            # Python internals
+            'site-packages/', 'lib/', 'bin/', 'Scripts/', '__pycache__/',
+            # Build/dist
+            'build/', 'dist/', '.eggs/', '.tox/',
+            # Tool caches
+            '.mypy_cache/', '.pytest_cache/', '.cache/', '.ipynb_checkpoints/',
+            # Coverage
+            'htmlcov/', '.coverage/',
+            # IDE/system
+            '.idea/', '.vscode/', '.fleet/',
+            # Version control
+            '.git/', '.svn/', '.hg/',
+            # Package managers
+            'node_modules/', 'vendor/',
+            # Project specific
+            '.claude/'
+        )):
+            continue
         
         if any(f.endswith('.py') for f in files) and root != '.':
             context_path = os.path.join(root, 'CONTEXT.llm')
@@ -142,6 +201,23 @@ def update_contexts():
     
     for context_file in Path('.').rglob('CONTEXT.llm'):
         module_path = context_file.parent
+        
+        # Skip if in excluded directory
+        rel_path = os.path.relpath(str(module_path))
+        if any(part in EXCLUDE_DIRS for part in module_path.parts):
+            continue
+        if rel_path.startswith((
+            'venv/', '.venv/', 'env/', 'ENV/', '.env/',
+            'site-packages/', 'lib/', 'bin/', 'Scripts/', '__pycache__/',
+            'build/', 'dist/', '.eggs/', '.tox/',
+            '.mypy_cache/', '.pytest_cache/', '.cache/', '.ipynb_checkpoints/',
+            'htmlcov/', '.coverage/',
+            '.idea/', '.vscode/', '.fleet/',
+            '.git/', '.svn/', '.hg/',
+            'node_modules/', 'vendor/',
+            '.claude/'
+        )):
+            continue
         
         # Re-analyze module
         analysis = {'classes': [], 'functions': []}
@@ -184,7 +260,35 @@ def scan_missing():
     missing = []
     
     for root, dirs, files in os.walk('.'):
-        dirs[:] = [d for d in dirs if d not in {'venv', '__pycache__', '.git', 'node_modules', '.claude', 'build', 'dist', '.tox'}]
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+        
+        # Additional path validation
+        rel_path = os.path.relpath(root)
+        if any(part in EXCLUDE_DIRS for part in Path(root).parts):
+            continue
+            
+        # Skip if path starts with excluded directories
+        if rel_path.startswith((
+            # Virtual environments
+            'venv/', '.venv/', 'env/', 'ENV/', '.env/',
+            # Python internals
+            'site-packages/', 'lib/', 'bin/', 'Scripts/', '__pycache__/',
+            # Build/dist
+            'build/', 'dist/', '.eggs/', '.tox/',
+            # Tool caches
+            '.mypy_cache/', '.pytest_cache/', '.cache/', '.ipynb_checkpoints/',
+            # Coverage
+            'htmlcov/', '.coverage/',
+            # IDE/system
+            '.idea/', '.vscode/', '.fleet/',
+            # Version control
+            '.git/', '.svn/', '.hg/',
+            # Package managers
+            'node_modules/', 'vendor/',
+            # Project specific
+            '.claude/'
+        )):
+            continue
         
         if any(f.endswith('.py') for f in files) and root != '.':
             if not os.path.exists(os.path.join(root, 'CONTEXT.llm')):

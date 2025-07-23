@@ -12,7 +12,6 @@ You are a senior developer who:
 
 **Understand Before Modifying**
 - NEVER modify code you haven't read and understood
-- ALWAYS backup before any changes (create *.backup files)
 - ALWAYS test after modifications
 
 **Surgical Fixes Only**
@@ -26,7 +25,7 @@ NEVER search/modify in: venv/, __pycache__/, .git/, node_modules/, .env*, dist/,
 
 ## MANDATORY CODE CHANGE PROCEDURE
 
-When modifying ANY code, you MUST follow this EXACT 9-step sequence:
+When modifying ANY code, you MUST follow this EXACT 7-step sequence:
 
 ### Step 1: Read PROJECT.llm
 ```bash
@@ -52,35 +51,33 @@ cat path/to/module/file.py | head -100
 find . -name "test_*.py" -o -name "*_test.py" | grep -E "${module_name}" | head -5
 ```
 
-### Step 5: Create baseline tests
-```bash
-python .claude/baseline.py module_name
-# This creates test_baseline_module_name.py
-```
-
-### Step 6: Run baseline tests
-```bash
-python -m pytest test_baseline_*.py -v
-# Must see: "✅ Baseline established"
-```
-
-### Step 7: Make minimal changes
+### Step 5: Make minimal changes
 - Edit ONLY what's needed
 - Preserve formatting/style
 - Update docstrings if behavior changes
 
-### Step 8: Test again
+### Step 6: Verify changes
 ```bash
-python -m pytest test_baseline_*.py -v
-# If failed:
-echo "❌ Tests failed! Showing options..."
-echo "1. Fix the code to pass tests"
-echo "2. Update tests if behavior should change"  
-echo "3. Revert changes with: git checkout -- file.py"
-# STOP and wait for user decision
+# For executable scripts:
+python script.py --help  # Check basic functionality
+python script.py [args]  # Test with actual arguments
+
+# For libraries/modules:
+python -c "import module_name; print(module_name.__name__)"
+python -c "from module import function; function(test_args)"
+
+# For web services:
+curl http://localhost:port/endpoint
+
+# If verification fails:
+echo "❌ Verification failed! Analyzing..."
+echo "1. Check error messages and stack traces"
+echo "2. Verify imports and dependencies"
+echo "3. Revert if needed: git checkout -- file.py"
+# STOP and analyze the issue
 ```
 
-### Step 9: Update contexts
+### Step 7: Update contexts
 ```bash
 # Update module CONTEXT.llm if interface changed
 python .claude/context.py update
@@ -92,21 +89,18 @@ python .claude/update.py
 
 ✓ Before ANY code change → Read PROJECT.llm (Step 1)
 ✓ Before module edit → Read module's CONTEXT.llm (Step 3)
-✓ Before making changes → Create baseline tests (Step 5)
-✓ After changes → Run ALL tests (Step 8)
-✓ If tests fail → STOP and show options
-✓ After completion → Update all contexts (Step 9)
+✓ After changes → Verify functionality (Step 6)
+✓ If verification fails → STOP and analyze
+✓ After completion → Update all contexts (Step 7)
 
 Example output at each control point:
 ```
 📍 Control Point 1: PROJECT.llm loaded ✓
 📍 Control Point 2: Module found at api/auth.py ✓
 📍 Control Point 3: CONTEXT.llm read ✓
-📍 Control Point 4: Created test_baseline_auth.py ✓
-📍 Control Point 5: Baseline tests pass ✓
-📍 Control Point 6: Making changes...
-📍 Control Point 7: Tests after changes... ❌ FAILED
-⚠️  STOPPING: Tests failed. Awaiting user decision.
+📍 Control Point 4: Making changes...
+📍 Control Point 5: Verifying functionality... ❌ FAILED
+⚠️  STOPPING: Import error. Module not found.
 ```
 
 ## PROJECT SETUP
@@ -158,13 +152,6 @@ setup_check() {
         fi
     done
     [[ $missing_context -eq 0 ]] && echo "  ✅ All modules documented" || echo "  ⚠️  $missing_context modules without CONTEXT.llm"
-    
-    # Test status
-    echo -e "\\n🧪 Test Status:"
-    baseline_count=$(find . -name "test_baseline_*.py" 2>/dev/null | wc -l)
-    echo "  🧪 Baseline tests: $baseline_count"
-    test_count=$(find . -name "test_*.py" -o -name "*_test.py" 2>/dev/null | grep -v baseline | wc -l)
-    echo "  🧪 Other tests: $test_count"
     
     # Git status
     if [[ -d ".git" ]]; then
@@ -225,7 +212,7 @@ auth -> utils
 - Create User: api.users.create -> validators.user -> models.User.create -> auth.hash_password
 
 @test_coverage:
-- auth/: 85% (baseline + unit tests)
+- auth/: 85% (unit tests)
 - api/: 70% (integration tests)
 - models/: 90% (unit tests)
 
@@ -381,7 +368,6 @@ find_related() {
 
 ### WITHOUT permission you CAN:
 - Read any files (except .env)
-- Create baseline tests
 - Run existing tests
 - Search codebase
 - Analyze dependencies
@@ -411,12 +397,13 @@ find_related() {
 
 1. **English only** - All code, variables, functions, documentation
 2. **No comments** in code - Use descriptive names and CONTEXT.llm
-3. **Test before change** - Baseline tests are mandatory
+3. **Verify before commit** - Test all changes practically
 4. **Small commits** - One logical change at a time
 5. **Update contexts** - Keep CONTEXT.llm and PROJECT.llm current
-6. **Fail fast** - Stop immediately when tests fail
+6. **Fail fast** - Stop immediately when verification fails
 7. **Explicit is better** - Clear function names over clever code
 8. **No Claude attribution** - Never add "Generated with Claude Code" or co-authorship
+9. **Clean git commits** - No AI/Claude mentions, use user's git config
 
 ## ERROR RECOVERY
 
@@ -435,8 +422,9 @@ cp file.py.backup file.py
 # 4. Or revert with git
 git checkout -- file.py
 
-# 5. Re-run baseline tests
-python -m pytest test_baseline_*.py -v
+# 5. Re-run verification
+python script.py --help  # For scripts
+python -c "import module"  # For libraries
 
 # 6. Check procedure compliance
 python .claude/validation.py --check-procedure
@@ -448,13 +436,11 @@ Quick commands to type in chat:
 - `u` or `update` → Update PROJECT.llm and contexts
 - `c` or `check` → Quick health check
 - `s` or `structure` → Show project structure
-- `baseline <module>` → Create baseline tests
 - `validate` → Run full validation
 - `procedure` → Check procedure compliance
 - `deps` → Show dependency graph
 - `ctx init` → Create missing CONTEXT.llm
 - `ctx update` → Update existing CONTEXT.llm
-- `test-all` → Run all baseline tests
 
 ## PERFORMANCE OPTIMIZATION
 
@@ -467,9 +453,9 @@ Quick commands to type in chat:
 ## VALIDATION CHECKLIST
 
 Before marking ANY task complete:
-□ All 9 procedure steps followed
+□ All 7 procedure steps followed
 □ All control points passed
-□ Baseline tests created and passing
+□ Verification successful
 □ No files accidentally modified
 □ CONTEXT.llm updated if interface changed
 □ PROJECT.llm updated if structure changed
@@ -480,14 +466,14 @@ Before marking ANY task complete:
 ## STRICT PROHIBITIONS
 
 NEVER DO:
-1. Skip any step in the 9-step procedure
-2. Modify code without baseline tests
-3. Ignore failing tests
+1. Skip any step in the 7-step procedure
+2. Modify code without verification
+3. Ignore failing verification
 4. Edit system directories (venv/, .git/, etc.)
 5. Make changes without reading CONTEXT.llm
 6. Add comments instead of clear names
 7. Create duplicate functionality
-8. Break existing tests without user approval
+8. Break existing functionality without user approval
 9. Continue after control point failure
 10. git push without explicit request
 

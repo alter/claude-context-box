@@ -10,10 +10,9 @@
 
 ### Mandatory Safety Rules
 - **NEVER** modify code you haven't read and understood
-- **ALWAYS** backup before any changes (create *.backup files)
 - **ALWAYS** test after modifications
-- **MUST** follow 9-step procedure for ANY code change
-- **STOP** immediately when tests fail
+- **MUST** follow 7-step procedure for ANY code change
+- **STOP** immediately when verification fails
 
 ### Surgical Fixes Only
 - Make MINIMUM changes to fix the issue
@@ -38,7 +37,7 @@
 - Modify configuration files
 - git push (remote push)
 
-## 📋 ОБЯЗАТЕЛЬНАЯ 9-ШАГОВАЯ ПРОЦЕДУРА
+## 📋 ОБЯЗАТЕЛЬНАЯ 7-ШАГОВАЯ ПРОЦЕДУРА
 
 For ANY code modification, follow these steps EXACTLY:
 
@@ -46,11 +45,9 @@ For ANY code modification, follow these steps EXACTLY:
 2. **Find target module** → Use efficient search
 3. **Read module CONTEXT.llm** → `cat path/to/module/CONTEXT.llm`
 4. **Analyze current code** → Read and understand
-5. **Create baseline tests** → `python .claude/baseline.py module_name`
-6. **Run baseline tests** → Must see "✅ Baseline established"
-7. **Make minimal changes** → Edit ONLY what's needed
-8. **Test again** → If failed: STOP and wait for user
-9. **Update contexts** → Run update if needed
+5. **Make minimal changes** → Edit ONLY what's needed
+6. **Verify changes** → If script: run with all args; If library: import and test method calls
+7. **Update contexts** → Run update if needed
 
 ## ⚡ БЫСТРЫЕ КОМАНДЫ
 
@@ -60,8 +57,6 @@ Type exactly (case-sensitive):
 - `s` or `structure` → Show PROJECT.llm structure
 - `h` or `help` → Show all commands
 - `validate` → Run full validation
-- `baseline <module>` → Create baseline tests
-- `test-all` → Run all baseline tests
 - `deps` → Show dependency graph
 - `ctx init` → Initialize CONTEXT.llm files
 - `ctx update` → Update existing CONTEXT.llm
@@ -72,7 +67,7 @@ Type exactly (case-sensitive):
 ### Python Environment
 - **ALWAYS** use `python3` (never `python`)
 - **ALWAYS** use `pip3` (never `pip`)
-- **ALWAYS** work in virtual environment `venv`
+- **ALWAYS** work in virtual environment `venv` or `.venv`
 
 ### Code Style
 - **NO COMMENTS** in code files
@@ -86,23 +81,28 @@ Type exactly (case-sensitive):
 - **NEVER** add Claude authorship or co-authorship to any files
 - **NEVER** use "Generated with Claude Code" or similar attributions
 
+### Git Rules
+- **NEVER** mention Claude/AI authorship in commit messages
+- **NEVER** change git config (user.name, user.email)
+- **ALWAYS** use existing user git configuration
+- Commits should describe changes, not tools used
+
 ## 📍 КОНТРОЛЬНЫЕ ТОЧКИ
 
 ✓ Before ANY code change → Read PROJECT.llm
 ✓ Before module edit → Read module's CONTEXT.llm
-✓ Before making changes → Create baseline tests
-✓ After changes → Run ALL tests
-✓ If tests fail → STOP and show options
+✓ After changes → Verify functionality
+✓ If verification fails → STOP and analyze
 ✓ After completion → Update all contexts
 
 ## 🎯 ПРИНЦИПЫ РАЗРАБОТКИ
 
 1. **English only** - All code, variables, functions, documentation
 2. **No comments** in code - Use descriptive names and CONTEXT.llm
-3. **Test before change** - Baseline tests are mandatory
+3. **Verify before commit** - Test all changes practically
 4. **Small commits** - One logical change at a time
 5. **Update contexts** - Keep CONTEXT.llm and PROJECT.llm current
-6. **Fail fast** - Stop immediately when tests fail
+6. **Fail fast** - Stop immediately when verification fails
 7. **Explicit is better** - Clear function names over clever code
 
 ## 📊 COMMAND MAPPINGS
@@ -117,8 +117,6 @@ c, check    → venv/bin/python3 .claude/check.py
 s, structure → cat PROJECT.llm
 validate    → venv/bin/python3 .claude/validation.py
 procedure   → venv/bin/python3 .claude/validation.py --check-procedure
-baseline X  → venv/bin/python3 .claude/baseline.py X
-test-all    → venv/bin/python3 -m pytest test_baseline_*.py -v
 deps        → cat PROJECT.llm | grep -A20 "@dependency_graph"
 project     → cat PROJECT.llm
 ctx init    → venv/bin/python3 .claude/context.py init

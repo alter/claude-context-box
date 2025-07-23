@@ -24,10 +24,32 @@ import platform
 
 # Configuration
 EXCLUDE_DIRS = {
-    'venv', '__pycache__', '.git', 'node_modules', '.pytest_cache',
-    'htmlcov', 'dist', 'build', '*.egg-info', '.tox', '.mypy_cache',
-    '.next', '.nuxt', 'coverage', '.nyc_output', 'tmp', 'temp',
-    'vendor', 'target', '.idea', '.vscode', '.fleet', '.claude'
+    # Virtual environments
+    'venv', '.venv', 'env', 'ENV', '.env',
+    
+    # Python cache
+    '__pycache__', '*.py[cod]',
+    
+    # Distribution/build
+    'build', 'dist', '*.egg-info', '.eggs',
+    
+    # Tool caches
+    '.mypy_cache', '.pytest_cache', '.cache', '.ipynb_checkpoints',
+    
+    # Testing and coverage
+    '.tox', '.coverage', 'htmlcov', 'coverage', '.nyc_output',
+    
+    # IDE and system configs
+    '.idea', '.vscode', '.fleet', '.DS_Store',
+    
+    # Version control
+    '.git', '.svn', '.hg',
+    
+    # Package managers
+    'node_modules', 'vendor',
+    
+    # Project specific
+    '.claude', '.next', '.nuxt', 'tmp', 'temp', 'target'
 }
 
 EXCLUDE_PATTERNS = {
@@ -134,9 +156,26 @@ def find_modules():
             
         # Extra check: skip if path starts with venv or common system paths
         rel_path = os.path.relpath(root)
-        if rel_path.startswith(('venv/', '.venv/', 'env/', '.env/', 
-                              'site-packages/', 'lib/', 'bin/', 'Scripts/',
-                              '.tox/', 'dist/', 'build/', '.git/', '.claude/')):
+        if rel_path.startswith((
+            # Virtual environments
+            'venv/', '.venv/', 'env/', 'ENV/', '.env/',
+            # Python internals
+            'site-packages/', 'lib/', 'bin/', 'Scripts/', '__pycache__/',
+            # Build/dist
+            'build/', 'dist/', '.eggs/', '.tox/',
+            # Tool caches
+            '.mypy_cache/', '.pytest_cache/', '.cache/', '.ipynb_checkpoints/',
+            # Coverage
+            'htmlcov/', '.coverage/',
+            # IDE/system
+            '.idea/', '.vscode/', '.fleet/',
+            # Version control
+            '.git/', '.svn/', '.hg/',
+            # Package managers
+            'node_modules/', 'vendor/',
+            # Project specific
+            '.claude/'
+        )):
             continue
             
         # Check for code files
