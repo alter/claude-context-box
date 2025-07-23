@@ -5,6 +5,7 @@ CLAUDE.md
 PROJECT.llm
 CONTEXT.llm
 CLAUDE_backup_*
+.claude-hooks.toml
 
 # Test files
 test_baseline_*.py
