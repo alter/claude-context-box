@@ -55,6 +55,9 @@ class ClaudeContextInstaller:
             # Create initial PROJECT.llm
             self.create_initial_project_llm()
             
+            # Create hooks configuration
+            self.create_hooks_config()
+            
             # Run initial update
             self.run_initial_update()
             
@@ -401,6 +404,59 @@ class ClaudeContextInstaller:
         with open(project_llm_path, 'w', encoding='utf-8') as f:
             f.write(content)
         print("  ✅ Created PROJECT.llm")
+    
+    def create_hooks_config(self):
+        """Create Claude Code hooks configuration"""
+        hooks_path = self.install_dir / '.claude-hooks.toml'
+        
+        # Check if already exists
+        if hooks_path.exists():
+            print("  ℹ️  .claude-hooks.toml already exists, skipping")
+            return
+            
+        print("\n🎪 Creating Claude Code hooks configuration...")
+        
+        # Load template
+        template_content = self.download_template('claude-hooks.toml')
+        if not template_content:
+            # Use embedded content
+            template_content = """# Claude Code Hooks Configuration
+# Automatically refresh context after /compact
+
+[[hooks]]
+event = "PreCompact"
+command = '''
+echo "🔄 Compact detected! Will auto-update after completion..."
+echo "   Run 'u' anytime to manually update and refresh context"
+'''
+
+# Remind about CONTEXT.llm before editing
+[[hooks]]
+event = "PreToolUse"
+[hooks.matcher]
+tool_name = "edit_file"
+file_paths = ["*.py"]
+command = '''
+DIR=$(dirname "$CLAUDE_FILE_PATHS" 2>/dev/null || echo ".")
+if [ -f "$DIR/CONTEXT.llm" ]; then
+    echo "📋 Module has CONTEXT.llm: $DIR/CONTEXT.llm"
+fi
+'''
+
+# Optional: Auto-format Python files (uncomment if you have ruff)
+# [[hooks]]
+# event = "PostToolUse"
+# [hooks.matcher]
+# tool_name = "edit_file"
+# file_paths = ["*.py"]
+# command = "ruff check --fix $CLAUDE_FILE_PATHS 2>/dev/null || true"
+"""
+        
+        # Write hooks config
+        with open(hooks_path, 'w', encoding='utf-8') as f:
+            f.write(template_content)
+        print("  ✅ Created .claude-hooks.toml")
+        print("  💡 Edit .claude-hooks.toml to customize automation")
     
     def run_initial_update(self):
         """Run initial context update"""

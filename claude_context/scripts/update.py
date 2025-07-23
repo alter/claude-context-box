@@ -808,14 +808,34 @@ def main():
     print(f"   - Modules: {state['total_modules']}")
     print(f"   - CONTEXT.llm files: ✅ All current")
     print(f"   - PROJECT.llm: ✅ Updated")
-    print(f"   - Baseline tests: Run 'baseline <module>' to create")
     print(f"   - CLAUDE.md rules: ✅ Applied")
+    
+    # Re-read CLAUDE.md to refresh context
+    print("\\n📋 Refreshing rules from CLAUDE.md...")
+    if os.path.exists('CLAUDE.md'):
+        with open('CLAUDE.md', 'r', encoding='utf-8') as f:
+            content = f.read()
+            # Extract and show key sections
+            if '## 📋 ОБЯЗАТЕЛЬНАЯ 7-ШАГОВАЯ ПРОЦЕДУРА' in content:
+                procedure_start = content.find('## 📋 ОБЯЗАТЕЛЬНАЯ 7-ШАГОВАЯ ПРОЦЕДУРА')
+                procedure_end = content.find('## ⚡', procedure_start)
+                if procedure_end > procedure_start:
+                    print("\\n" + "="*50)
+                    print(content[procedure_start:procedure_end].strip())
+                    print("="*50)
+    
+    # Show quick commands reminder
+    print("\\n⚡ QUICK COMMANDS:")
+    print("   u → Update (this command)")
+    print("   c → Check health")
+    print("   s → Show structure")
+    print("   After /compact → Run 'u' to refresh everything!")
     
     if not venv_check():
         print("\\n⚠️  REMINDER: Activate virtual environment!")
-        print("   Run: source venv/bin/activate")
+        print("   Run: source venv/bin/activate or .venv/bin/activate")
     
-    print("\\n💡 Your project is now fully up to date!")
+    print("\\n💡 Your project is fully updated and rules are refreshed!")
     print("   Ready for Claude development 🚀")
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@
 - **Enhanced exclusion rules** - Better handling of virtual environments (.venv, venv, env, etc.)
 - **Git best practices** - No AI/Claude mentions in commits, respects user git config
 - **Practical verification** - Test scripts by running them, libraries by importing them
+- **Auto venv detection** - Commands automatically find and use correct Python from venv/.venv/env
+- **PostCompact hook** - Automatically refreshes context after /compact command
 
 A modern context management system for Claude AI that enforces coding standards and maintains deep project understanding.
 
@@ -82,19 +84,18 @@ Mandatory procedure for ANY code changes:
 5. Make minimal changes
 6. Verify changes (run scripts, import libraries, test endpoints)
 7. Update contexts
-9. Update contexts
 
 ### 📋 Context Management
 - **CONTEXT.llm** - Automatic documentation for every module
 - **PROJECT.llm** - Architecture and dependency tracking
 - **CLAUDE.md** - Project rules and instructions for Claude
 
-### 🧪 Baseline Testing
-Create snapshots before making changes:
-```bash
-baseline auth      # Create tests for auth module
-test-all          # Run all baseline tests
-```
+### 🎪 Claude Code Hooks (New!)
+Automatic actions with `.claude-hooks.toml`:
+- **PostCompact** - Auto-updates context after /compact
+- **PostToolUse** - Auto-format Python files
+- **PreToolUse** - Remind about CONTEXT.llm
+See `claude_context/templates/claude-hooks.toml` for examples
 
 ## 🏗️ Project Structure
 

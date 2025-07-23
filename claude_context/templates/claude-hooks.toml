@@ -1,0 +1,79 @@
+# Claude Code Hooks Configuration
+# Place this in your project root as .claude-hooks.toml
+
+# Remind to update after compact
+[[hooks]]
+event = "PreCompact"
+command = '''
+echo "🔄 Compact operation starting..."
+echo "📋 TIP: Run 'u' after compact to refresh context and rules!"
+echo "   This will update PROJECT.llm, CONTEXT.llm files and reload CLAUDE.md"
+'''
+
+# Alternative: Run update automatically after certain operations
+[[hooks]]
+event = "UserPromptSubmit"
+[hooks.matcher]
+# Run after compact command
+prompt_patterns = ["/compact*"]
+command = '''
+echo "🔄 Auto-updating after compact..."
+if [ -f ".claude/get_python.py" ]; then
+    PYTHON=$(.claude/get_python.py)
+else
+    PYTHON="python3"
+fi
+# Small delay to ensure compact is done
+sleep 2
+$PYTHON .claude/update.py 2>/dev/null || echo "Run 'u' to update manually"
+'''
+
+# Auto-format Python files after edit
+[[hooks]]
+event = "PostToolUse"
+[hooks.matcher]
+tool_name = "edit_file"
+file_paths = ["*.py"]
+command = """
+# Only run if ruff is available
+if command -v ruff >/dev/null 2>&1; then
+    echo "🔧 Auto-formatting Python files..."
+    ruff check --fix $CLAUDE_FILE_PATHS 2>/dev/null || true
+fi
+"""
+
+# Remind about CONTEXT.llm when editing modules
+[[hooks]]
+event = "PreToolUse"
+[hooks.matcher]
+tool_name = "edit_file"
+file_paths = ["*.py"]
+command = """
+# Check if CONTEXT.llm exists in the module directory
+DIR=$(dirname "$CLAUDE_FILE_PATHS")
+if [ -f "$DIR/CONTEXT.llm" ]; then
+    echo "📋 Remember: Read $DIR/CONTEXT.llm before editing!"
+else
+    echo "⚠️  No CONTEXT.llm in $DIR - run 'ctx init' to create"
+fi
+"""
+
+# Notification when Claude needs attention
+[[hooks]]
+event = "Notification"
+command = """
+echo "🔔 Claude needs your attention!"
+# Add your notification command here (e.g., terminal-notifier, notify-send, etc.)
+"""
+
+# Run checks after major operations
+[[hooks]]
+event = "PostToolUse"
+[hooks.matcher]
+tool_name = "bash"
+# Match update/check commands
+command_patterns = ["*update.py*", "*check.py*"]
+command = """
+echo "✅ Operation completed. Current status:"
+$(.claude/get_python.py) .claude/check.py 2>/dev/null || echo "Run 'c' for full check"
+"""
