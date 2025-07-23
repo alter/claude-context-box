@@ -111,18 +111,18 @@ All commands check for venv and use it if available:
 
 ```bash
 # When user types exactly:
-h, help     → $(python3 .claude/get_python.py) .claude/help.py
-u, update   → $(python3 .claude/get_python.py) .claude/update.py
-c, check    → $(python3 .claude/get_python.py) .claude/check.py
+h, help     → $(.claude/get_python.sh) .claude/help.py
+u, update   → $(.claude/get_python.sh) .claude/update.py
+c, check    → $(.claude/get_python.sh) .claude/check.py
 s, structure → cat PROJECT.llm
-validate    → $(python3 .claude/get_python.py) .claude/validation.py
-procedure   → $(python3 .claude/get_python.py) .claude/validation.py --check-procedure
+validate    → $(.claude/get_python.sh) .claude/validation.py
+procedure   → $(.claude/get_python.sh) .claude/validation.py --check-procedure
 deps        → cat PROJECT.llm | grep -A20 "@dependency_graph"
 project     → cat PROJECT.llm
-ctx init    → $(python3 .claude/get_python.py) .claude/context.py init
-ctx update  → $(python3 .claude/get_python.py) .claude/context.py update
-ctx scan    → $(python3 .claude/get_python.py) .claude/context.py scan
-cc, cleancode → $(python3 .claude/get_python.py) .claude/cleancode.py --interactive
+ctx init    → $(.claude/get_python.sh) .claude/context.py init
+ctx update  → $(.claude/get_python.sh) .claude/context.py update
+ctx scan    → $(.claude/get_python.sh) .claude/context.py scan
+cc, cleancode → $(.claude/get_python.sh) .claude/cleancode.py --interactive
 ```
 
 ## 🔄 ADDITIONAL CONTEXT
@@ -131,4 +131,4 @@ cc, cleancode → $(python3 .claude/get_python.py) .claude/cleancode.py --intera
 @.claude/format.md  # Project-specific format
 
 ---
-*Claude Context Box v{{ version }} - Updated: {{ timestamp }}*
+*Claude Context Box v0.1.0 - Updated: 2025-07-23T12:01:21.487127*

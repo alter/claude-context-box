@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import re
 from datetime import datetime
 from pathlib import Path
 import urllib.request
@@ -36,11 +37,21 @@ class ClaudeContextInstaller:
         try:
             # Check for existing installation
             if self.check_existing_installation():
-                if not self.force:
-                    print("\n⚠️  Existing installation detected!")
-                    print("   Use CLAUDE_FORCE=1 to override")
-                    return False
-                self.backup_existing()
+                if self.force:
+                    # FORCE MODE: Complete replacement
+                    print("\n🔥 FORCE MODE: Complete replacement")
+                    self.backup_existing()
+                    # Remove existing files
+                    if self.claude_dir.exists():
+                        shutil.rmtree(self.claude_dir)
+                    for file in ['CLAUDE.md', 'PROJECT.llm']:
+                        file_path = self.install_dir / file
+                        if file_path.exists():
+                            file_path.unlink()
+                else:
+                    # NORMAL MODE: Smart update with merge
+                    print("\n🔄 NORMAL MODE: Smart update with merge")
+                    # Don't stop, continue with smart merge
             
             # Setup virtual environment
             if not self.no_venv:
@@ -49,10 +60,15 @@ class ClaudeContextInstaller:
             # Install core files
             self.install_core_files()
             
-            # Create CLAUDE.md
-            self.create_claude_md()
+            # Create or update CLAUDE.md
+            if self.force or not (self.install_dir / 'CLAUDE.md').exists():
+                # Force mode or first install: create fresh
+                self.create_claude_md()
+            else:
+                # Normal mode: merge existing
+                self.merge_claude_md()
             
-            # Create initial PROJECT.llm
+            # Create initial PROJECT.llm (only if doesn't exist)
             self.create_initial_project_llm()
             
             # Create hooks configuration
@@ -360,21 +376,78 @@ class ClaudeContextInstaller:
         content = template.replace('{{ version }}', self.version)
         content = content.replace('{{ timestamp }}', datetime.now().isoformat())
         
-        # Check for existing user content
-        claude_md_path = self.install_dir / 'CLAUDE.md'
-        if claude_md_path.exists():
-            try:
-                existing = claude_md_path.read_text(encoding='utf-8')
-                if '# Previous User Documentation' in existing:
-                    user_content = existing.split('# Previous User Documentation')[1].strip()
-                    content += f"\n\n---\n\n# Previous User Documentation\n\n{user_content}"
-            except:
-                pass
-        
         # Write file
+        claude_md_path = self.install_dir / 'CLAUDE.md'
         with open(claude_md_path, 'w', encoding='utf-8') as f:
             f.write(content)
         print("  ✅ Created CLAUDE.md")
+    
+    def merge_claude_md(self):
+        """Merge existing CLAUDE.md with new template, preserving user customizations"""
+        print("\n📝 Updating CLAUDE.md with merge...")
+        
+        claude_md_path = self.install_dir / 'CLAUDE.md'
+        
+        # Read existing content
+        existing_content = claude_md_path.read_text(encoding='utf-8')
+        
+        # Get new template
+        template = self.download_template('claude.md')
+        if not template:
+            template = self.get_basic_claude_template()
+        
+        # Replace variables
+        new_content = template.replace('{{ version }}', self.version)
+        new_content = template.replace('{{ timestamp }}', datetime.now().isoformat())
+        
+        # Extract user customizations from existing file
+        user_customizations = []
+        
+        # 1. Check for custom command mappings (e.g., .venv instead of venv)
+        if '.venv/bin/python3' in existing_content or '$(python3 .claude/get_python.py)' in existing_content:
+            # User has custom venv setup, preserve it
+            # Extract the command mappings section
+            cmd_match = re.search(r'```bash\n# When user types exactly:(.+?)```', existing_content, re.DOTALL)
+            if cmd_match:
+                user_commands = cmd_match.group(1)
+                # Replace in new content
+                new_cmd_match = re.search(r'```bash\n# When user types exactly:(.+?)```', new_content, re.DOTALL)
+                if new_cmd_match:
+                    new_content = new_content.replace(new_cmd_match.group(0), f'```bash\n# When user types exactly:{user_commands}```')
+                    user_customizations.append("Custom command mappings")
+        
+        # 2. Check for user-added sections
+        if '# Previous User Documentation' in existing_content:
+            user_doc = existing_content.split('# Previous User Documentation')[1].strip()
+            new_content += f"\n\n---\n\n# Previous User Documentation\n\n{user_doc}"
+            user_customizations.append("User documentation section")
+        
+        # 3. Check for additional user sections not in template
+        existing_sections = re.findall(r'^##\s+(.+)$', existing_content, re.MULTILINE)
+        template_sections = re.findall(r'^##\s+(.+)$', template, re.MULTILINE)
+        
+        for section in existing_sections:
+            if section not in template_sections and not any(emoji in section for emoji in ['🚨', '⛔', '📋', '⚡', '🔧', '📍', '🎯', '📊', '🔄']):
+                # This is a user-added section
+                section_match = re.search(rf'^##\s+{re.escape(section)}.*?(?=^##|\Z)', existing_content, re.MULTILINE | re.DOTALL)
+                if section_match:
+                    new_content += f"\n\n{section_match.group(0).strip()}\n"
+                    user_customizations.append(f"User section: {section}")
+        
+        # Create backup
+        backup_path = claude_md_path.with_suffix('.md.backup')
+        shutil.copy2(claude_md_path, backup_path)
+        
+        # Write merged content
+        with open(claude_md_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        
+        print("  ✅ Updated CLAUDE.md")
+        if user_customizations:
+            print("  📝 Preserved user customizations:")
+            for item in user_customizations:
+                print(f"     - {item}")
+        print(f"  💾 Backup saved as: {backup_path.name}")
     
     def create_initial_project_llm(self):
         """Create initial PROJECT.llm if it doesn't exist"""
