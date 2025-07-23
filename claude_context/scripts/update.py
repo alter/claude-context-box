@@ -228,17 +228,23 @@ def create_project_llm(modules, dependencies):
     
     # Load existing PROJECT.llm if exists
     existing_changes = []
-    existing_version = "1.0.0"
+    existing_version = "0.1.0"
     existing_paths = []
+    existing_project_name = os.path.basename(os.getcwd())
     
     if os.path.exists('PROJECT.llm'):
         try:
             with open('PROJECT.llm', 'r') as f:
                 content = f.read()
                 
+                # Extract project name
+                if '@project:' in content:
+                    project_line = content.split('@project:')[1].split('\n')[0].strip()
+                    existing_project_name = project_line
+                
                 # Extract version
                 if '@version:' in content:
-                    version_line = content.split('@version:')[1].split('\\n')[0].strip()
+                    version_line = content.split('@version:')[1].split('\n')[0].strip()
                     existing_version = version_line
                 
                 # Extract recent changes
@@ -256,7 +262,7 @@ def create_project_llm(modules, dependencies):
             pass
     
     # Start building content
-    content = f"""@project: {os.path.basename(os.getcwd())}
+    content = f"""@project: {existing_project_name}
 @version: {existing_version}
 @updated: {now}
 
@@ -286,10 +292,10 @@ def create_project_llm(modules, dependencies):
         if deps:
             desc += f" [@deps: {', '.join(deps)}]"
         
-        content += f"\\n- {desc}"
+        content += f"\n- {desc}"
     
     # Add dependency graph
-    content += "\\n\\n@dependency_graph:"
+    content += "\n\n@dependency_graph:"
     
     # Build dependency tree
     dep_tree = {}
@@ -300,22 +306,27 @@ def create_project_llm(modules, dependencies):
             dep_tree[dep].append(module)
     
     # Show dependencies
+    has_deps = False
     for module in sorted(modules.keys()):
         deps = dependencies.get(module, [])
         if deps:
-            content += f"\\n{module} -> {' -> '.join(deps)}"
+            content += f"\n{module} -> {', '.join(deps)}"
+            has_deps = True
+    
+    if not has_deps:
+        content += "\n# Dependencies will be mapped by update.py"
     
     # Add critical paths
-    content += "\\n\\n@critical_paths:"
+    content += "\n\n@critical_paths:"
     if existing_paths:
         for path in existing_paths:
-            content += f"\\n{path}"
+            content += f"\n{path}"
     else:
-        content += "\\n- [Analyze code to determine critical paths]"
-        content += "\\n- [Add user flow paths here]"
+        content += "\n- [Analyze code to determine critical paths]"
+        content += "\n- [Add user flow paths here]"
     
     # Add test coverage
-    content += "\\n\\n@test_coverage:"
+    content += "\n\n@test_coverage:"
     
     # Check for baseline tests
     baseline_tests = list(Path('tests').glob('test_baseline_*.py')) if Path('tests').exists() else []
@@ -324,19 +335,21 @@ def create_project_llm(modules, dependencies):
         has_baseline = any(t.name == f"test_baseline_{module_name}.py" for t in baseline_tests)
         
         coverage = "baseline tests" if has_baseline else "no tests"
-        content += f"\\n- {module_path}/: {coverage}"
+        content += f"\n- {module_path}/: {coverage}"
     
     # Add recent changes
-    content += "\\n\\n@recent_changes:"
+    content += "\n\n@recent_changes:"
     
     # Determine what changed
     change_desc = "Updated project structure"
-    if len(modules) > len(existing_changes):
+    if not existing_changes:  # First time
+        change_desc = "Initial Claude Context Box installation"
+    elif len(modules) > len([c for c in existing_changes if 'modules' in c]):
         change_desc = "Added new modules"
     
-    content += f"\\n- {now}: {change_desc}"
+    content += f"\n- {now}: {change_desc}"
     for change in existing_changes[:9]:  # Keep 9 old + 1 new = 10 total
-        content += f"\\n{change}"
+        content += f"\n{change}"
     
     with open('PROJECT.llm', 'w') as f:
         f.write(content)
@@ -379,26 +392,26 @@ def create_format_md():
     for module in sorted(modules.keys()):
         info = modules[module]
         marker = "✓" if info['has_context'] else "❌"
-        content += f"\\n- `{module}/` - {marker} CONTEXT.llm"
+        content += f"\n- `{module}/` - {marker} CONTEXT.llm"
     
-    content += "\\n\\n## Python Project Info"
+    content += "\n\n## Python Project Info"
     py_files = sum(len(info['files']) for info in modules.values())
-    content += f"\\n- Total Python files: {py_files}"
-    content += f"\\n- Total modules: {len(modules)}"
-    content += f"\\n- Has requirements.txt: {'✅' if os.path.exists('requirements.txt') else '❌'}"
-    content += f"\\n- Has setup.py: {'✅' if os.path.exists('setup.py') else '❌'}"
-    content += f"\\n- Has pyproject.toml: {'✅' if os.path.exists('pyproject.toml') else '❌'}"
+    content += f"\n- Total Python files: {py_files}"
+    content += f"\n- Total modules: {len(modules)}"
+    content += f"\n- Has requirements.txt: {'✅' if os.path.exists('requirements.txt') else '❌'}"
+    content += f"\n- Has setup.py: {'✅' if os.path.exists('setup.py') else '❌'}"
+    content += f"\n- Has pyproject.toml: {'✅' if os.path.exists('pyproject.toml') else '❌'}"
     
     # Modules without CONTEXT.llm
     missing_context = [m for m, info in modules.items() if not info['has_context']]
     if missing_context:
-        content += "\\n\\n## ⚠️ Modules Missing CONTEXT.llm:"
+        content += "\n\n## ⚠️ Modules Missing CONTEXT.llm:"
         for module in missing_context:
-            content += f"\\n- `{module}/`"
+            content += f"\n- `{module}/`"
     
-    content += "\\n\\n## File Types\\n"
+    content += "\n\n## File Types\n"
     for ext, count in sorted(file_types.items(), key=lambda x: x[1], reverse=True)[:10]:
-        content += f"\\n- `{ext}`: {count} files"
+        content += f"\n- `{ext}`: {count} files"
     
     content += """
 
@@ -483,13 +496,13 @@ def generate_context_llm(module_path):
     
     # Add classes
     for cls in all_classes:
-        content += f"\\n- class {cls['name']}"
+        content += f"\n- class {cls['name']}"
         for method in cls['methods']:
-            content += f"\\n  - {method}()"
+            content += f"\n  - {method}()"
     
     # Add functions
     for func in all_functions:
-        content += f"\\n- {func}()"
+        content += f"\n- {func}()"
     
     content += """
 
@@ -544,18 +557,18 @@ def update_existing_contexts():
             content = f.read()
         
         # Update interface section
-        new_interface = "\\n@interface:"
+        new_interface = "\n@interface:"
         for cls in analysis['classes']:
-            new_interface += f"\\n- class {cls['name']}"
+            new_interface += f"\n- class {cls['name']}"
             for method in cls['methods']:
-                new_interface += f"\\n  - {method}()"
+                new_interface += f"\n  - {method}()"
         for func in analysis['functions']:
-            new_interface += f"\\n- {func}()"
+            new_interface += f"\n- {func}()"
         
         # Replace interface section
         if '@interface:' in content:
             before = content.split('@interface:')[0]
-            after = '\\n@behavior:' + content.split('@behavior:')[1] if '@behavior:' in content else ''
+            after = '\n@behavior:' + content.split('@behavior:')[1] if '@behavior:' in content else ''
             new_content = before + new_interface + after
             
             with open(context_file, 'w') as f:
