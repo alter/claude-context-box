@@ -641,7 +641,7 @@ For ANY code modification, follow these steps EXACTLY..."""
         
         # Script names to install
         script_names = ['update.py', 'check.py', 'help.py', 'context.py', 
-                       'baseline.py', 'validation.py', 'cleancode.py']
+                       'validation.py', 'cleancode.py', 'get_python.py']
         
         for script_name in script_names:
             # Load from claude_context/scripts/ directory
