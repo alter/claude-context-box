@@ -1,6 +1,14 @@
 # Claude Context Box - COMPACT RULES
 
-## 🚨 7-STEP PROCEDURE (MANDATORY)
+## 🚨 TECH APPROVAL (HIGHEST PRIORITY)
+Before ANY new tech/library/framework:
+1. DESCRIBE what & why
+2. EXPLAIN problem it solves
+3. DETAIL usage
+4. WAIT for approval
+NEVER add without approval!
+
+## 📋 7-STEP PROCEDURE (MANDATORY)
 1. Read PROJECT.llm
 2. Find module
 3. Read CONTEXT.llm
@@ -14,6 +22,7 @@
 - Without permission: modify/delete/refactor code
 - Add AI/Claude mentions in commits
 - Skip verification step
+- Add new tech without approval
 
 ## ⚡ COMMANDS
 - `u` → Update all

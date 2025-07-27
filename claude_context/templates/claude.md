@@ -2,6 +2,15 @@
 
 ## 🚨 CRITICAL RULES (HIGHEST PRIORITY - OVERRIDE ALL)
 
+### Technology Approval Rule (ABSOLUTE HIGHEST PRIORITY)
+- **MANDATORY**: Before adding ANY new technology, library, framework, or tool:
+  1. **DESCRIBE** what technology you want to add
+  2. **EXPLAIN** why it's needed (what problem it solves)
+  3. **DETAIL** how it will be used
+  4. **SPECIFY** if it replaces something or adds new capability
+  5. **WAIT** for explicit approval before proceeding
+- **NEVER** add new technologies without this approval process
+
 ### Core Priorities
 1. **Stability First** → **Clean Code** → **DRY** → **KISS** → **SOLID**
 2. Creates resilient, maintainable systems
