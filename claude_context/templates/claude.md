@@ -1,3 +1,10 @@
+USER_COMMAND_SHORTCUTS_EXECUTE_VIA_BASH
+WHEN_USER_TYPES_u → RUN_BASH: $(python3 .claude/get_python.py) .claude/update.py
+WHEN_USER_TYPES_c → RUN_BASH: $(python3 .claude/get_python.py) .claude/check.py
+WHEN_USER_TYPES_s → RUN_BASH: cat PROJECT.llm
+WHEN_USER_TYPES_h → RUN_BASH: $(python3 .claude/get_python.py) .claude/help.py
+NEVER_TASK_NEVER_SEARCH ALWAYS_BASH_EXECUTE
+
 ULTRATHINK_MANDATORY for PLAN ANALYZE RESEARCH INTEGRATE REFACTOR VERIFY DEBUG
 - PLAN implementation_strategy architecture_decisions system_impacts
 - ANALYZE complex_problems current_code dependencies trace_impacts
@@ -48,17 +55,18 @@ after_change ULTRATHINK_verify test_thoroughly
 if_fail STOP ULTRATHINK_analyze find_root_cause
 after_success update_contexts maintain_consistency
 
-COMMANDS_EXACT_CASE_SENSITIVE
-u update universal_update_everything
-c check health_check_project
-s structure show_PROJECT.llm
-h help show_all_commands
-validate full_validation_all_rules
-deps dependency_graph
-ctx_init create_CONTEXT.llm
-ctx_update update_CONTEXT.llm
-cc cleancode interactive_cleanup
-think activate_ultrathink_analysis
+COMMANDS_EXACT_CASE_SENSITIVE_EXECUTE_SCRIPTS
+WHEN_USER_TYPES_EXACTLY:
+u → EXECUTE: $(python3 .claude/get_python.py) .claude/update.py
+c → EXECUTE: $(python3 .claude/get_python.py) .claude/check.py
+s → EXECUTE: cat PROJECT.llm
+h → EXECUTE: $(python3 .claude/get_python.py) .claude/help.py
+validate → EXECUTE: $(python3 .claude/get_python.py) .claude/validation.py
+deps → EXECUTE: cat PROJECT.llm | grep -A20 "@dependency_graph"
+ctx_init → EXECUTE: $(python3 .claude/get_python.py) .claude/context.py init
+ctx_update → EXECUTE: $(python3 .claude/get_python.py) .claude/context.py update
+cc → EXECUTE: $(python3 .claude/get_python.py) .claude/cleancode.py --interactive
+NEVER_interpret_commands_differently ALWAYS_execute_exact_script
 
 PYTHON_ENVIRONMENT_STRICT
 ALWAYS python3 NEVER python
