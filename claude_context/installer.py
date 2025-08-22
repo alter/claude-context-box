@@ -77,6 +77,9 @@ class ClaudeContextInstaller:
             # Run initial update
             self.run_initial_update()
             
+            # Setup MCP if requested
+            self.setup_mcp_if_enabled()
+            
             print(f"\n✅ Installation complete!")
             return True
             
@@ -565,6 +568,57 @@ fi
                 if result.stderr:
                     print(f"     {result.stderr}")
     
+    def setup_mcp_if_enabled(self):
+        """Setup MCP Memory Service if enabled via environment variable"""
+        mcp_enable = os.environ.get('MCP_ENABLE', '').lower() in ('1', 'true', 'yes')
+        
+        if not mcp_enable:
+            return
+        
+        print("\n🧠 Setting up MCP Memory Service...")
+        
+        # Copy mcp_setup.py to .claude directory  
+        # Load from claude_context/scripts/ directory
+        mcp_setup_path_src = Path(__file__).parent / 'scripts' / 'mcp_setup.py'
+        if mcp_setup_path_src.exists():
+            mcp_setup_content = mcp_setup_path_src.read_text(encoding='utf-8')
+            mcp_setup_path = self.claude_dir / 'mcp_setup.py'
+            with open(mcp_setup_path, 'w', encoding='utf-8') as f:
+                f.write(mcp_setup_content)
+            mcp_setup_path.chmod(0o755)
+            print("  ✅ Created mcp_setup.py")
+            
+            # Run MCP setup with auto mode
+            python_exe = sys.executable
+            env = os.environ.copy()
+            env['MCP_AUTO_SETUP'] = '1'  # Auto-accept prompts
+            
+            result = subprocess.run(
+                [python_exe, str(mcp_setup_path)],
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                print("  ✅ MCP Memory Service configured")
+                print("\n  📚 MCP Commands available in Claude:")
+                print("    /memory-store - Store memory")
+                print("    /memory-search - Search memories")
+                print("    /memory-recall - Recall by time")
+                print("    /memory-health - Check status")
+            else:
+                print("  ⚠️  MCP setup completed with warnings")
+                if result.stderr:
+                    print(f"     {result.stderr}")
+                print("\n  💡 To setup MCP manually, run:")
+                print(f"     python3 {mcp_setup_path}")
+        else:
+            print("  ⚠️  MCP setup script not found")
+            print("  💡 Install MCP manually:")
+            print("     pip install uv")
+            print("     uvx mcp-memory-service")
+    
     def get_basic_claude_template(self):
         """Get basic CLAUDE.md template if download fails"""
         return """# Claude Context Box Project
@@ -641,7 +695,8 @@ For ANY code modification, follow these steps EXACTLY..."""
         
         # Script names to install
         script_names = ['update.py', 'check.py', 'help.py', 'context.py', 
-                       'validation.py', 'cleancode.py', 'get_python.py']
+                       'validation.py', 'cleancode.py', 'get_python.py',
+                       'mcp_setup.py', 'mcp_check.py']
         
         for script_name in script_names:
             # Load from claude_context/scripts/ directory

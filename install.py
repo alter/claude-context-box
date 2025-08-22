@@ -13,6 +13,7 @@ Environment Variables:
     CLAUDE_HOME       - Installation directory (default: current dir)
     CLAUDE_NO_VENV    - Skip virtual environment creation (default: create)
     CLAUDE_FORCE      - Force reinstall even if exists (default: false)
+    MCP_ENABLE        - Install and configure MCP Memory Service (default: false)
     CLAUDE_UNINSTALL  - Uninstall instead of install (default: false)
 """
 
@@ -228,6 +229,8 @@ def initialize_project(python_exe, config):
         env['CLAUDE_FORCE'] = '1'
     if config['no_venv']:
         env['CLAUDE_NO_VENV'] = '1'
+    if os.getenv('MCP_ENABLE'):
+        env['MCP_ENABLE'] = os.getenv('MCP_ENABLE')
     
     # Try to run initialization via Python module
     init_cmd = f"{python_exe} -c \"from claude_context.installer import ClaudeContextInstaller; installer = ClaudeContextInstaller(); installer.run()\""

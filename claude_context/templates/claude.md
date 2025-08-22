@@ -66,7 +66,15 @@ deps → EXECUTE: cat PROJECT.llm | grep -A20 "@dependency_graph"
 ctx_init → EXECUTE: $(python3 .claude/get_python.py) .claude/context.py init
 ctx_update → EXECUTE: $(python3 .claude/get_python.py) .claude/context.py update
 cc → EXECUTE: $(python3 .claude/get_python.py) .claude/cleancode.py --interactive
+mcp → EXECUTE: $(python3 .claude/get_python.py) .claude/mcp_setup.py
 NEVER_interpret_commands_differently ALWAYS_execute_exact_script
+
+MCP_MEMORY_COMMANDS_IF_ENABLED
+/memory-store content tags → Store_memory_with_semantic_search
+/memory-search query → Search_memories_semantically
+/memory-recall time_expression → Recall_memories_by_time
+/memory-health → Check_MCP_memory_status
+MCP_stores_in .local/mcp/memory.db
 
 PYTHON_ENVIRONMENT_STRICT
 ALWAYS python3 NEVER python

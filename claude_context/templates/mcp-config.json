@@ -1,0 +1,23 @@
+{
+  "comment": "MCP Memory Service configuration for Claude Desktop",
+  "comment2": "This configuration enables persistent memory for Claude",
+  "mcpServers": {
+    "memory": {
+      "command": "{{ python_path }}",
+      "args": [
+        "-m",
+        "uvx",
+        "mcp-memory-service"
+      ],
+      "env": {
+        "MCP_MEMORY_STORAGE_BACKEND": "sqlite_vec",
+        "MCP_MEMORY_SQLITE_PATH": "{{ project_path }}/.local/mcp/memory.db",
+        "MCP_MEMORY_BACKUPS_PATH": "{{ project_path }}/.local/mcp/backups",
+        "MCP_CONSOLIDATION_ENABLED": "true",
+        "MAX_RESULTS_PER_QUERY": "10",
+        "SIMILARITY_THRESHOLD": "0.7",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}

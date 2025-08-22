@@ -44,6 +44,16 @@ def main():
   cleancode, cc     - Interactive dead code cleanup
   v, venv          - Setup/check Python environment
 
+🧠 MCP MEMORY SERVICE:
+  mcp              - Setup MCP Memory Service  
+  mcp check        - Check MCP status
+  
+  If MCP is enabled, these commands work in Claude:
+  /memory-store    - Store memory with tags
+  /memory-search   - Search stored memories
+  /memory-recall   - Recall by time expression
+  /memory-health   - Check memory system status
+
 📝 MANDATORY WORKFLOW (9 Steps):
   1. Read PROJECT.llm
   2. Find target module
