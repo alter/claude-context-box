@@ -26,7 +26,7 @@ NEVER_CREATE _new _enhanced _final _updated _v2 _copy versions
 ALWAYS_MODIFY existing_files_only
 NEVER_DUPLICATE functionality
 
-FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv
+FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv .local
 NEED_PERMISSION modify delete create refactor install git_push package_changes
 
 8STEP_MANDATORY_PROCEDURE

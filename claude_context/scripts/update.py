@@ -49,7 +49,7 @@ EXCLUDE_DIRS = {
     'node_modules', 'vendor',
     
     # Project specific
-    '.claude', '.next', '.nuxt', 'tmp', 'temp', 'target'
+    '.claude', '.next', '.nuxt', 'tmp', 'temp', 'target', '.local'
 }
 
 EXCLUDE_PATTERNS = {
