@@ -755,6 +755,8 @@ def validate_project_health():
 
 def main():
     """🚀 UNIVERSAL PROJECT UPDATER - Does EVERYTHING automatically!"""
+    print("UPDATE starting...")
+    print("REMINDER: Use ultrathink for PLAN->ANALYZE->VERIFY")
     print("🚀 Universal Project Update - Making everything current...")
     
     # Log that we're starting the universal update
@@ -850,6 +852,8 @@ def main():
     
     print("\\n💡 Your project is fully updated and rules are refreshed!")
     print("   Ready for Claude development 🚀")
+    print("\\nUPDATE complete")
+    print("Next: Use 'think' command for complex analysis")
 
 if __name__ == "__main__":
     main()

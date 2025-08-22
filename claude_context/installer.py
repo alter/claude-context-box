@@ -363,7 +363,7 @@ class ClaudeContextInstaller:
             print(f"  ✅ Created {script_name}")
     
     def create_claude_md(self):
-        """Create CLAUDE.md with all critical rules included"""
+        """Create CLAUDE.md with ultrathink rules"""
         print("\n📝 Creating CLAUDE.md...")
         
         # Get template

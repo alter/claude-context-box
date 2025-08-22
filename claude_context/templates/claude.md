@@ -1,143 +1,169 @@
-# Claude Context Box Project
+ULTRATHINK_MANDATORY for PLAN ANALYZE RESEARCH INTEGRATE REFACTOR VERIFY DEBUG
+- PLAN implementation_strategy architecture_decisions system_impacts
+- ANALYZE complex_problems current_code dependencies trace_impacts
+- RESEARCH new_technologies integration_options best_practices
+- INTEGRATE external_services libraries APIs ensure_compatibility
+- REFACTOR major_changes breaking_changes migration_paths
+- VERIFY all_changes test_coverage edge_cases error_handling
+- DEBUG complex_issues trace_dependencies isolate_problems
+USE ultrathink BEFORE proposing_solutions AND verifying_changes
 
-## 🚨 CRITICAL RULES (HIGHEST PRIORITY - OVERRIDE ALL)
+TECH_APPROVAL_MANDATORY before_ANY_new_tech
+1_DESCRIBE what_technology why_needed
+2_EXPLAIN problem_solves current_limitations
+3_DETAIL how_used integration_plan
+4_SPECIFY replaces_or_adds impacts_on_existing
+5_WAIT explicit_approval NEVER_proceed_without
 
-### Technology Approval Rule (ABSOLUTE HIGHEST PRIORITY)
-- **MANDATORY**: Before adding ANY new technology, library, framework, or tool:
-  1. **DESCRIBE** what technology you want to add
-  2. **EXPLAIN** why it's needed (what problem it solves)
-  3. **DETAIL** how it will be used
-  4. **SPECIFY** if it replaces something or adds new capability
-  5. **WAIT** for explicit approval before proceeding
-- **NEVER** add new technologies without this approval process
+NEVER_CREATE _new _enhanced _final _updated _v2 _copy versions
+ALWAYS_MODIFY existing_files_only
+NEVER_DUPLICATE functionality
 
-### Core Priorities
-1. **Stability First** → **Clean Code** → **DRY** → **KISS** → **SOLID**
-2. Creates resilient, maintainable systems
-3. Respects existing codebase structure
-4. Minimizes breaking changes
+FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv
+NEED_PERMISSION modify delete create refactor install git_push package_changes
 
-### Mandatory Safety Rules
-- **NEVER** modify code you haven't read and understood
-- **ALWAYS** test after modifications
-- **MUST** follow 7-step procedure for ANY code change
-- **STOP** immediately when verification fails
+8STEP_MANDATORY_PROCEDURE
+1_read PROJECT.llm understand_architecture
+2_find target_module efficient_search
+3_read module/CONTEXT.llm understand_interface
+4_PLAN approach WITH_ULTRATHINK consider_all_impacts trace_dependencies
+5_ANALYZE current_code WITH_ULTRATHINK understand_flow identify_changes
+6_make MINIMAL_changes preserve_functionality maintain_style
+7_VERIFY WITH_ULTRATHINK run_all_paths test_edge_cases check_errors
+8_update contexts if_interface_changed update_PROJECT.llm
 
-### Surgical Fixes Only
-- Make MINIMUM changes to fix the issue
-- Preserve existing functionality
-- Only refactor with explicit permission
-- Test edge cases after any change
+VERIFY_REQUIREMENTS WITH_ULTRATHINK
+scripts python_script.py_--help then_real_args all_code_paths
+libs python_-c_import_module test_all_methods check_state
+apis curl_endpoints test_errors check_timeouts validate_responses
+coverage all_branches error_handling edge_cases boundary_conditions
+FAIL STOP_immediately ULTRATHINK_root_cause analyze_stack_trace
 
-## ⛔ STRICTLY FORBIDDEN
+CONTROL_POINTS_MANDATORY
+before_change read_PROJECT.llm understand_system
+before_plan ULTRATHINK_strategy consider_alternatives
+before_edit read_CONTEXT.llm understand_contract
+during_analysis ULTRATHINK_dependencies trace_impacts
+after_change ULTRATHINK_verify test_thoroughly
+if_fail STOP ULTRATHINK_analyze find_root_cause
+after_success update_contexts maintain_consistency
 
-### Never Search/Modify In:
-- `venv/`, `__pycache__/`, `.git/`
-- `node_modules/`, `.env*`, `dist/`
-- `build/`, `*.egg-info/`
+COMMANDS_EXACT_CASE_SENSITIVE
+u update universal_update_everything
+c check health_check_project
+s structure show_PROJECT.llm
+h help show_all_commands
+validate full_validation_all_rules
+deps dependency_graph
+ctx_init create_CONTEXT.llm
+ctx_update update_CONTEXT.llm
+cc cleancode interactive_cleanup
+think activate_ultrathink_analysis
 
-### Never Do Without Permission:
-- Modify existing code
-- Delete any files
-- Create new features
-- Refactor existing code
-- Change project structure
-- Install new packages
-- Modify configuration files
-- git push (remote push)
+PYTHON_ENVIRONMENT_STRICT
+ALWAYS python3 NEVER python
+ALWAYS pip3 NEVER pip
+ALWAYS venv or .venv REQUIRED
+NO_COMMENTS in_code_files
+ENGLISH_ONLY all_identifiers
+SELF_DOCUMENTING clear_names descriptive_functions
 
-## 📋 MANDATORY 7-STEP PROCEDURE
+GIT_RULES_STRICT
+NEVER mention_Claude_AI_LLM_generated
+NEVER change_git_config user_settings
+USE existing_user_config only
+DESCRIBE changes_not_tools implementation_not_origin
+NO_ATTRIBUTION no_co_authorship
 
-For ANY code modification, follow these steps EXACTLY:
+DOCUMENTATION_REQUIREMENTS
+ALWAYS create_CONTEXT.llm new_modules
+ALWAYS update_CONTEXT.llm when_modifying
+ALWAYS read_CONTEXT.llm before_working
+CONTEXT.llm interface_contract_only
+PROJECT.llm system_architecture_map
 
-1. **Read PROJECT.llm** → `cat PROJECT.llm`
-2. **Find target module** → Use efficient search
-3. **Read module CONTEXT.llm** → `cat path/to/module/CONTEXT.llm`
-4. **Analyze current code** → Read and understand
-5. **Make minimal changes** → Edit ONLY what's needed
-6. **Verify changes** → If script: run with all args; If library: import and test method calls
-7. **Update contexts** → Run update if needed
+DEVELOPMENT_PRIORITIES_ORDER
+1_stability_first prevent_breaking_changes
+2_clean_code readable_maintainable
+3_DRY dont_repeat_yourself
+4_KISS keep_it_simple_stupid
+5_SOLID single_responsibility open_closed
 
-## ⚡ QUICK COMMANDS
+CRITICAL_CYCLE PLAN->ANALYZE->VERIFY all_WITH_ULTRATHINK
+surgical_fixes minimum_viable_changes
+preserve_existing maintain_compatibility
+test_edge_cases verify_error_handling
+fail_fast stop_on_first_error
+explicit_better_than_clever clear_over_smart
 
-Type exactly (case-sensitive):
-- `u` or `update` → 🚀 Universal update (does EVERYTHING)
-- `c` or `check` → Quick health check
-- `s` or `structure` → Show PROJECT.llm structure
-- `h` or `help` → Show all commands
-- `validate` → Run full validation
-- `deps` → Show dependency graph
-- `ctx init` → Initialize CONTEXT.llm files
-- `ctx update` → Update existing CONTEXT.llm
-- `cc` or `cleancode` → Interactive dead code cleanup
+PROCEDURE_CHECKPOINTS
+CP1 PROJECT.llm_loaded system_understood
+CP2 module_found correct_location
+CP3 CONTEXT.llm_read interface_understood
+CP4 changes_planned WITH_ULTRATHINK
+CP5 code_analyzed WITH_ULTRATHINK
+CP6 changes_made minimal_correct
+CP7 verification_passed all_tests_green
+CP8 contexts_updated consistency_maintained
 
-## 🔧 ENVIRONMENT RULES
+WITHOUT_PERMISSION_CANNOT
+modify_existing_code any_changes
+delete_files remove_functionality
+create_features add_new_code
+refactor_code restructure_existing
+change_structure move_rename_files
+install_packages add_dependencies
+modify_configs change_settings
+git_push remote_operations
 
-### Python Environment
-- **ALWAYS** use `python3` (never `python`)
-- **ALWAYS** use `pip3` (never `pip`)
-- **ALWAYS** work in virtual environment `venv` or `.venv`
+WITH_PERMISSION_CAN
+read_any_files except_env
+run_tests execute_validation
+search_codebase grep_find_analyze
+analyze_deps understand_structure
+create_backups safety_copies
+generate_CONTEXT.llm documentation
 
-### Code Style
-- **NO COMMENTS** in code files
-- Use **ENGLISH ONLY** for all code, variables, functions
-- Self-documenting code with clear naming
+ERROR_RECOVERY_PROCEDURE
+1_check git_status git_diff
+2_validate run_validation_scripts
+3_restore backup_or_git_checkout
+4_revert git_checkout_--_file
+5_rerun verification_tests
+6_check procedure_compliance
+7_analyze failure_root_cause
 
-### Documentation
-- **ALWAYS** create CONTEXT.llm for new modules
-- **ALWAYS** update CONTEXT.llm when modifying
-- **ALWAYS** read CONTEXT.llm before working
-- **NEVER** add Claude authorship or co-authorship to any files
-- **NEVER** use "Generated with Claude Code" or similar attributions
+VALIDATION_CHECKLIST_BEFORE_COMPLETE
+all_8_steps_followed procedure_complete
+control_points_passed all_green
+verification_successful tests_pass
+no_accidental_modifications clean_changes
+CONTEXT.llm_updated if_interface_changed
+PROJECT.llm_updated if_structure_changed
+no_comments_added clean_code
+english_only all_identifiers
+git_status_clean except_intended
 
-### Git Rules
-- **NEVER** mention Claude/AI authorship in commit messages
-- **NEVER** change git config (user.name, user.email)
-- **ALWAYS** use existing user git configuration
-- Commits should describe changes, not tools used
+STRICT_PROHIBITIONS_NEVER_DO
+skip_procedure_steps follow_all_8
+modify_without_verification always_test
+ignore_failing_tests stop_on_failure
+edit_forbidden_zones respect_boundaries
+change_without_CONTEXT read_first
+add_comments use_clear_names
+duplicate_functionality reuse_existing
+break_without_permission preserve_working
+continue_after_failure stop_analyze
+git_push_without_request explicit_only
 
-## 📍 CONTROL POINTS
+ULTRATHINK_USAGE_EXAMPLES
+add_feature ULTRATHINK plan_implementation analyze_impacts verify_integration
+fix_bug ULTRATHINK trace_cause analyze_flow plan_fix verify_solution
+integrate_Redis ULTRATHINK analyze_architecture plan_integration verify_compatibility
+refactor_auth ULTRATHINK impact_analysis migration_plan backward_compatibility
+optimize_queries ULTRATHINK research_patterns benchmark_plan measure_improvements
+debug_issue ULTRATHINK trace_dependencies isolate_problem systematic_elimination
+security_audit ULTRATHINK threat_model vulnerability_scan mitigation_plan
+performance_tune ULTRATHINK profile_bottlenecks optimization_strategy verify_gains
 
-✓ Before ANY code change → Read PROJECT.llm
-✓ Before module edit → Read module's CONTEXT.llm
-✓ After changes → Verify functionality
-✓ If verification fails → STOP and analyze
-✓ After completion → Update all contexts
-
-## 🎯 DEVELOPMENT PRINCIPLES
-
-1. **English only** - All code, variables, functions, documentation
-2. **No comments** in code - Use descriptive names and CONTEXT.llm
-3. **Verify before commit** - Test all changes practically
-4. **Small commits** - One logical change at a time
-5. **Update contexts** - Keep CONTEXT.llm and PROJECT.llm current
-6. **Fail fast** - Stop immediately when verification fails
-7. **Explicit is better** - Clear function names over clever code
-
-## 📊 COMMAND MAPPINGS
-
-All commands check for venv and use it if available:
-
-```bash
-# When user types exactly:
-h, help     → $(python3 .claude/get_python.py) .claude/help.py
-u, update   → $(python3 .claude/get_python.py) .claude/update.py
-c, check    → $(python3 .claude/get_python.py) .claude/check.py
-s, structure → cat PROJECT.llm
-validate    → $(python3 .claude/get_python.py) .claude/validation.py
-procedure   → $(python3 .claude/get_python.py) .claude/validation.py --check-procedure
-deps        → cat PROJECT.llm | grep -A20 "@dependency_graph"
-project     → cat PROJECT.llm
-ctx init    → $(python3 .claude/get_python.py) .claude/context.py init
-ctx update  → $(python3 .claude/get_python.py) .claude/context.py update
-ctx scan    → $(python3 .claude/get_python.py) .claude/context.py scan
-cc, cleancode → $(python3 .claude/get_python.py) .claude/cleancode.py --interactive
-```
-
-## 🔄 ADDITIONAL CONTEXT
-
-@.claude/prompt.md  # Detailed system prompt
-@.claude/format.md  # Project-specific format
-
----
-*Claude Context Box v{{ version }} - Updated: {{ timestamp }}*
+ALWAYS ultrathink for PLAN->ANALYZE->VERIFY cycle NO_EXCEPTIONS
