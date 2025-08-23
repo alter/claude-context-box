@@ -104,13 +104,11 @@ def run_command(cmd, cwd=None, capture=True, env=None):
 def check_existing_installation(config):
     """Check if Claude Context Box is already installed"""
     claude_dir = config['home'] / '.claude'
-    venv_dir = config['home'] / 'venv'
     
-    if claude_dir.exists() or venv_dir.exists():
+    if claude_dir.exists():
         if config['force']:
             print_colored("🔄 Force reinstall enabled - removing existing installation", Colors.YELLOW)
-            if claude_dir.exists():
-                shutil.rmtree(claude_dir)
+            shutil.rmtree(claude_dir)
             return False
         else:
             print_colored("⚠️  Claude Context Box already installed", Colors.YELLOW)
