@@ -26,6 +26,13 @@ NEVER_CREATE _new _enhanced _final _updated _v2 _copy versions
 ALWAYS_MODIFY existing_files_only
 NEVER_DUPLICATE functionality
 
+NO_FALLBACK_MECHANISMS_EVER
+chosen_approach → ONLY_use_that DELETE_previous
+new_database → REMOVE_old_completely NO_dual_support
+new_algorithm → REPLACE_entirely NO_legacy_paths
+selected_solution → COMMIT_fully NO_safety_nets
+migration_means → FULL_replacement NO_backward_compat
+
 FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv .local
 NEED_PERMISSION modify delete create refactor install git_push package_changes
 
