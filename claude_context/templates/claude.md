@@ -46,6 +46,13 @@ apis curl_endpoints test_errors check_timeouts validate_responses
 coverage all_branches error_handling edge_cases boundary_conditions
 FAIL STOP_immediately ULTRATHINK_root_cause analyze_stack_trace
 
+K8S_DOCKER_FIX_PROPAGATION_MANDATORY
+hotfix_in_pod/container → MUST_also_fix_in_repo_source
+prevent_redeploy_regression sync_deployed_to_repository
+container_fix temporary repo_fix permanent
+kubectl_exec_changes → git_commit_same_changes
+docker_run_fixes → update_dockerfile_and_code
+
 CONTROL_POINTS_MANDATORY
 before_change read_PROJECT.llm understand_system
 before_plan ULTRATHINK_strategy consider_alternatives
