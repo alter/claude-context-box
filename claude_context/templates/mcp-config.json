@@ -6,8 +6,7 @@
       "command": "{{ python_path }}",
       "args": [
         "-m",
-        "uvx",
-        "mcp-memory-service"
+        "mcp_memory_service"
       ],
       "env": {
         "MCP_MEMORY_STORAGE_BACKEND": "sqlite_vec",

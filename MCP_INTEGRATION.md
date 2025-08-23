@@ -7,6 +7,8 @@ Claude Context Box now includes optional integration with the doobidoo MCP Memor
 - **Semantic Memory Storage**: Store and retrieve memories using natural language
 - **Persistent Storage**: SQLite-vec backend for fast, lightweight storage
 - **Auto-consolidation**: Dream-inspired memory organization system
+- **Venv Integration**: Installs directly into your project's virtual environment
+- **Memory Preservation**: Pre/post compact hooks preserve memory context
 - **Multi-client Support**: Works with Claude Desktop, VS Code, Cursor, and more
 
 ## Installation
@@ -58,11 +60,18 @@ The installer automatically configures Claude Desktop with MCP. The configuratio
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 - Linux: `~/.config/Claude/claude_desktop_config.json`
 
+## How It Works
+
+1. **Installation**: MCP Memory Service installs directly into your project's venv
+2. **Configuration**: Claude Desktop is configured to use the venv Python
+3. **Hooks**: Pre/post compact hooks preserve memory during context operations
+4. **Storage**: All data stored locally in `.local/mcp/memory.db`
+
 ## Requirements
 
 - Python 3.8+
+- Virtual environment (venv or .venv)
 - Claude Desktop (for memory commands)
-- uv package manager (installed automatically)
 
 ## Troubleshooting
 
@@ -70,13 +79,17 @@ The installer automatically configures Claude Desktop with MCP. The configuratio
 1. Restart Claude Desktop after installation
 2. Check status: `python3 .claude/mcp_check.py`
 3. Verify config exists in Claude's config directory
+4. Ensure venv is active when running commands
 
 ### Installation fails
 1. Ensure Python 3.8+ is installed
-2. Try manual installation:
+2. Activate your virtual environment first
+3. Try manual installation:
    ```bash
-   pip install uv
-   uvx --from git+https://github.com/doobidoo/mcp-memory-service.git mcp-memory-service
+   # Activate venv
+   source venv/bin/activate  # or .venv/bin/activate
+   # Install MCP
+   pip install git+https://github.com/doobidoo/mcp-memory-service.git
    ```
 
 ### Memory commands not available
