@@ -60,6 +60,13 @@ container_fix temporary repo_fix permanent
 kubectl_exec_changes → git_commit_same_changes
 docker_run_fixes → update_dockerfile_and_code
 
+TASK_EXECUTION_AUTONOMOUS
+multiple_tasks → EXECUTE_ALL_no_confirmation
+continue_until → ALL_COMPLETE_or_error
+no_user_prompts → UNLESS_explicitly_requested
+task_plan → FULL_EXECUTION_no_pauses
+if_task_list → COMPLETE_ENTIRE_PLAN
+
 CONTROL_POINTS_MANDATORY
 before_change read_PROJECT.llm understand_system
 before_plan ULTRATHINK_strategy consider_alternatives
