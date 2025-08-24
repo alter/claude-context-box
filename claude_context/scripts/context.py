@@ -23,7 +23,7 @@ EXCLUDE_DIRS = {
     'build', 'dist', '*.egg-info', '.eggs',
     
     # Tool caches
-    '.mypy_cache', '.pytest_cache', '.cache', '.ipynb_checkpoints',
+    '.mypy_cache', '.pytest_cache', '.cache', '.ipynb_checkpoints', '.checkpoints',
     
     # Testing and coverage
     '.tox', '.coverage', 'htmlcov', 'coverage', '.nyc_output',

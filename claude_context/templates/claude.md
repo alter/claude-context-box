@@ -40,7 +40,7 @@ permanent_scripts → PROPER_module_location NOT_root
 project_root → CLEAN_minimal NO_test.py_debug.py
 organize_by_purpose → tmp/_temporary docs/_documentation src/_code
 
-FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv .local
+FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv .local .checkpoints
 NEED_PERMISSION modify delete create refactor install git_push package_changes
 
 8STEP_MANDATORY_PROCEDURE
