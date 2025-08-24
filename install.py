@@ -171,6 +171,11 @@ def setup_virtual_environment(config):
             venv_dir = config['home'] / 'venv'
             print_colored("📦 Creating standard venv", Colors.BLUE)
         
+        # Clean up broken venv if it exists but wasn't detected as valid
+        if venv_dir.exists():
+            print_colored(f"🧹 Cleaning up broken {venv_dir.name}", Colors.YELLOW)
+            shutil.rmtree(venv_dir)
+        
         if not run_command(f"{sys.executable} -m venv {venv_dir}", config['home']):
             print_colored("❌ Failed to create virtual environment", Colors.RED)
             sys.exit(1)
