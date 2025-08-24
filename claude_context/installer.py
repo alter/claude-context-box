@@ -608,11 +608,23 @@ fi
                 print("    /memory-recall - Recall by time")
                 print("    /memory-health - Check status")
             else:
-                print("  ⚠️  MCP setup completed with warnings")
-                if result.stderr:
-                    print(f"     {result.stderr}")
-                print("\n  💡 To setup MCP manually, run:")
-                print(f"     python3 {mcp_setup_path}")
+                print("  ⚠️  MCP installation failed - Claude Context Box installed successfully")
+                print("\n  📋 MCP is optional. To install later:")
+                print("    • In Claude: type 'mcp'")
+                print("    • Manually: python3 .claude/mcp_setup.py")
+                
+                # Provide OS-specific guidance
+                import platform
+                if platform.system() == "Darwin":
+                    print("\n  🍎 macOS: Install Xcode Command Line Tools first:")
+                    print("    xcode-select --install")
+                elif platform.system() == "Linux":
+                    print("\n  🐧 Linux: Install build tools first:")
+                    print("    sudo apt-get install build-essential python3-dev")
+                elif platform.system() == "Windows":
+                    print("\n  🪟 Windows: Install Visual Studio Build Tools")
+                
+                print("\n  ✅ Claude Context Box works perfectly without MCP")
         else:
             print("  ⚠️  MCP setup script not found")
             print("  💡 Install MCP manually:")

@@ -65,17 +65,45 @@ def get_python_executable():
     return sys.executable
 
 
-def install_mcp_memory():
-    """Install MCP memory service directly in venv"""
-    print("\n📦 Installing MCP Memory Service...")
+def get_platform_info():
+    """Get detailed platform information for debugging"""
+    system = platform.system()
+    machine = platform.machine()
+    python_version = sys.version_info
     
-    python_exe = get_python_executable()
-    print(f"  🐍 Using Python: {python_exe}")
+    return {
+        "system": system,
+        "machine": machine,
+        "python": f"{python_version.major}.{python_version.minor}",
+        "is_arm": machine.lower() in ['arm64', 'aarch64'],
+        "is_m1": system == "Darwin" and machine == "arm64"
+    }
+
+def try_install_with_wheels(python_exe):
+    """Try to install using pre-built wheels first"""
+    print("  🎯 Attempting installation with pre-built wheels...")
     
-    # Set up environment for macOS C++ compilation
+    try:
+        # First, try to install numpy and other dependencies with wheels
+        subprocess.run([
+            python_exe, "-m", "pip", "install",
+            "--only-binary", ":all:",
+            "numpy", "chroma-hnswlib"
+        ], check=True, capture_output=True, text=True)
+        
+        print("  ✅ Pre-built dependencies installed")
+        return True
+    except subprocess.CalledProcessError:
+        print("  ⚠️  No pre-built wheels available for your platform")
+        return False
+
+def setup_compilation_env():
+    """Set up environment for C++ compilation based on platform"""
     env = os.environ.copy()
-    if platform.system() == "Darwin":
-        # Check for SDK path
+    platform_info = get_platform_info()
+    
+    if platform_info["system"] == "Darwin":
+        # macOS specific setup
         sdk_paths = [
             "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
             "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
@@ -83,33 +111,129 @@ def install_mcp_memory():
         
         for sdk_path in sdk_paths:
             if Path(sdk_path).exists():
-                print(f"  🔧 Setting up macOS SDK paths for C++ compilation")
+                print(f"  🔧 Configuring macOS SDK paths...")
                 env["SDKROOT"] = sdk_path
                 env["CPLUS_INCLUDE_PATH"] = f"{sdk_path}/usr/include/c++/v1:{env.get('CPLUS_INCLUDE_PATH', '')}"
+                
+                # For ARM64 Macs
+                if platform_info["is_m1"]:
+                    env["ARCHFLAGS"] = "-arch arm64"
+                    env["_PYTHON_HOST_PLATFORM"] = "macosx-11.0-arm64"
                 break
     
+    elif platform_info["system"] == "Linux":
+        # Linux specific setup
+        env["CFLAGS"] = "-std=c++14"
+        env["CXXFLAGS"] = "-std=c++14"
+    
+    elif platform_info["system"] == "Windows":
+        # Windows specific setup
+        # Try to use MSVC if available
+        env["DISTUTILS_USE_SDK"] = "1"
+    
+    return env
+
+def install_mcp_memory():
+    """Install MCP memory service with multiple fallback strategies"""
+    print("\n📦 Installing MCP Memory Service...")
+    
+    python_exe = get_python_executable()
+    platform_info = get_platform_info()
+    
+    print(f"  🐍 Python: {python_exe}")
+    print(f"  🖥️  Platform: {platform_info['system']} {platform_info['machine']}")
+    
+    # Strategy 1: Try with pre-built wheels
+    if try_install_with_wheels(python_exe):
+        try:
+            subprocess.run([
+                python_exe, "-m", "pip", "install",
+                "--no-deps",
+                "git+https://github.com/doobidoo/mcp-memory-service.git"
+            ], check=True, capture_output=True, text=True)
+            
+            print("  ✅ MCP Memory Service installed successfully!")
+            return True
+        except subprocess.CalledProcessError:
+            pass
+    
+    # Strategy 2: Try with compilation
+    print("  🔨 Attempting compilation from source...")
+    env = setup_compilation_env()
+    
     try:
-        # Install mcp-memory-service from GitHub
-        subprocess.run([
-            python_exe, "-m", "pip", "install", 
+        # Install compilation dependencies first
+        if platform_info["system"] == "Darwin":
+            # Try to install with specific flags for macOS
+            subprocess.run([
+                python_exe, "-m", "pip", "install",
+                "--no-cache-dir",
+                "chroma-hnswlib"
+            ], check=True, env=env, capture_output=True, text=True)
+        
+        # Now try full installation
+        result = subprocess.run([
+            python_exe, "-m", "pip", "install",
             "git+https://github.com/doobidoo/mcp-memory-service.git"
-        ], check=True, env=env)
+        ], env=env, capture_output=True, text=True)
         
-        print("  ✅ MCP Memory Service installed in venv")
-        return True
-        
+        if result.returncode == 0:
+            print("  ✅ MCP Memory Service installed successfully!")
+            return True
+        else:
+            raise subprocess.CalledProcessError(result.returncode, result.args, result.stderr)
+            
     except subprocess.CalledProcessError as e:
-        print(f"  ⚠️  Failed to install MCP Memory Service: {e}")
+        print(f"  ❌ Installation failed")
         
-        if platform.system() == "Darwin":
-            print("\n  💡 macOS C++ compilation issue detected")
-            print("  Try running: xcode-select --install")
-            print("  Or manually set SDK paths and retry:")
-            print(f"    export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
-            print(f"    export CPLUS_INCLUDE_PATH=$SDKROOT/usr/include/c++/v1:$CPLUS_INCLUDE_PATH")
+        # Provide platform-specific guidance
+        print("\n  📋 Installation Requirements:")
         
-        print(f"\n  Manual installation command:")
+        if platform_info["system"] == "Darwin":
+            print("\n  🍎 macOS Requirements:")
+            print("  1. Install Xcode Command Line Tools:")
+            print("     xcode-select --install")
+            print("\n  2. If already installed, try:")
+            print("     sudo xcode-select --reset")
+            print("\n  3. For Homebrew Python, ensure you have:")
+            print("     brew install python@3.11")
+            
+        elif platform_info["system"] == "Linux":
+            print("\n  🐧 Linux Requirements:")
+            print("  • Ubuntu/Debian:")
+            print("    sudo apt-get update")
+            print("    sudo apt-get install build-essential python3-dev")
+            print("\n  • RHEL/CentOS/Fedora:")
+            print("    sudo yum groupinstall 'Development Tools'")
+            print("    sudo yum install python3-devel")
+            print("\n  • Arch Linux:")
+            print("    sudo pacman -S base-devel python")
+            
+        elif platform_info["system"] == "Windows":
+            print("\n  🪟 Windows Requirements:")
+            print("  1. Install Visual Studio Build Tools:")
+            print("     https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022")
+            print("\n  2. Or install Visual Studio Community with C++ support")
+            print("\n  3. Restart your terminal after installation")
+        
+        print("\n  💡 Alternative: Install without compilation")
+        print("  If compilation fails, you can try installing MCP without ChromaDB,")
+        print("  but memory features will be limited.")
+        
+        print(f"\n  🔧 Manual installation with environment setup:")
+        if platform_info["system"] == "Darwin":
+            print("    export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
+            print("    export CPLUS_INCLUDE_PATH=$SDKROOT/usr/include/c++/v1:$CPLUS_INCLUDE_PATH")
         print(f"    {python_exe} -m pip install git+https://github.com/doobidoo/mcp-memory-service.git")
+        
+        # Log error details for debugging
+        if e.stderr:
+            print("\n  📝 Error details (for debugging):")
+            error_lines = e.stderr.split('\n')
+            for line in error_lines[-10:]:  # Show last 10 lines
+                if line.strip():
+                    print(f"    {line.strip()}")
+        
         return False
 
 
