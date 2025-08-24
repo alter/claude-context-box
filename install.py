@@ -159,21 +159,17 @@ def setup_virtual_environment(config):
                 break
     
     # Use existing venv or create new one
-    if existing_venv and not config['force']:
+    if existing_venv:
         venv_dir = existing_venv
+        print_colored(f"📦 Using existing virtual environment: {venv_dir.name}", Colors.GREEN)
     else:
-        # Create new venv
+        # Create new venv only if none exists
         if is_poetry_project:
             venv_dir = config['home'] / '.venv'
             print_colored("🎭 Poetry project detected - creating .venv", Colors.BLUE)
         else:
             venv_dir = config['home'] / 'venv'
             print_colored("📦 Creating standard venv", Colors.BLUE)
-        
-        # Remove existing venv if force reinstall
-        if venv_dir.exists() and config['force']:
-            print_colored(f"🗑️  Removing existing {venv_dir.name}", Colors.YELLOW)
-            shutil.rmtree(venv_dir)
         
         if not run_command(f"{sys.executable} -m venv {venv_dir}", config['home']):
             print_colored("❌ Failed to create virtual environment", Colors.RED)
