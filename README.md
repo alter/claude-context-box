@@ -32,6 +32,10 @@ CLAUDE_FORCE=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-
 
 ### Installation with MCP Memory Service
 
+**Prerequisites for MCP** (optional, only if using MCP):
+- macOS: Xcode Command Line Tools (`xcode-select --install`)
+- Linux: Build essentials (`apt-get install build-essential`)
+
 ```bash
 # Install with MCP Memory Service enabled
 MCP_ENABLE=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3

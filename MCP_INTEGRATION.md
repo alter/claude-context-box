@@ -11,6 +11,24 @@ Claude Context Box now includes optional integration with the doobidoo MCP Memor
 - **Memory Preservation**: Pre/post compact hooks preserve memory context
 - **Multi-client Support**: Works with Claude Desktop, VS Code, Cursor, and more
 
+## Requirements
+
+### macOS
+- **Xcode Command Line Tools** required for C++ compilation:
+  ```bash
+  xcode-select --install
+  ```
+
+### Linux
+- Build essentials for C++ compilation:
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install build-essential
+  
+  # RHEL/CentOS/Fedora
+  sudo yum groupinstall "Development Tools"
+  ```
+
 ## Installation
 
 ### With MCP Support
@@ -81,7 +99,29 @@ The installer automatically configures Claude Desktop with MCP. The configuratio
 3. Verify config exists in Claude's config directory
 4. Ensure venv is active when running commands
 
-### Installation fails
+### Installation fails with C++ compilation error
+**Error**: `fatal error: 'iostream' file not found` or similar C++ errors
+
+**Solution**: Install C++ development tools:
+```bash
+# macOS
+xcode-select --install
+
+# Ubuntu/Debian
+sudo apt-get install build-essential
+
+# RHEL/CentOS/Fedora
+sudo yum groupinstall "Development Tools"
+```
+
+After installing development tools, retry MCP setup:
+```bash
+mcp  # In Claude
+# Or manually:
+python3 .claude/mcp_setup.py
+```
+
+### Installation fails for other reasons
 1. Ensure Python 3.8+ is installed
 2. Activate your virtual environment first
 3. Try manual installation:
