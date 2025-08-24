@@ -250,17 +250,23 @@ def main():
         print(f"✅ Using venv Python: {python_exe}")
     else:
         print(f"⚠️  No venv found, using system Python: {python_exe}")
-        response = input("\n❓ Continue without venv? (y/n): ")
-        if response.lower() not in ('y', 'yes'):
-            print("⏭️  Please activate venv first")
-            return
+        if sys.stdin.isatty():
+            response = input("\n❓ Continue without venv? (y/n): ")
+            if response.lower() not in ('y', 'yes'):
+                print("⏭️  Please activate venv first")
+                return
+        else:
+            print("⚠️  Continuing with system Python (non-interactive mode)")
     
     # Check if user wants to proceed
-    if os.environ.get('MCP_AUTO_SETUP', '').lower() not in ('1', 'true', 'yes'):
+    # Auto-proceed if running non-interactively (from Claude) or MCP_AUTO_SETUP is set
+    if sys.stdin.isatty() and os.environ.get('MCP_AUTO_SETUP', '').lower() not in ('1', 'true', 'yes'):
         response = input("\n❓ Install and configure MCP Memory Service? (y/n): ")
         if response.lower() not in ('y', 'yes'):
             print("⏭️  Skipping MCP setup")
             return
+    else:
+        print("🚀 Auto-installing MCP Memory Service (non-interactive mode)")
     
     # Install MCP memory service in venv
     if not install_mcp_memory():

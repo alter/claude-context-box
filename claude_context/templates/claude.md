@@ -102,7 +102,7 @@ deps → EXECUTE: cat PROJECT.llm | grep -A20 "@dependency_graph"
 ctx_init → EXECUTE: $(python3 .claude/get_python.py) .claude/context.py init
 ctx_update → EXECUTE: $(python3 .claude/get_python.py) .claude/context.py update
 cc → EXECUTE: $(python3 .claude/get_python.py) .claude/cleancode.py --interactive
-mcp → EXECUTE: $(python3 .claude/get_python.py) .claude/mcp_setup.py
+mcp → EXECUTE: MCP_AUTO_SETUP=1 $(python3 .claude/get_python.py) .claude/mcp_setup.py
 NEVER_interpret_commands_differently ALWAYS_execute_exact_script
 
 MCP_MEMORY_COMMANDS_IF_ENABLED
