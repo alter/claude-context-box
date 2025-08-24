@@ -159,7 +159,7 @@ def setup_virtual_environment(config):
                 break
     
     # Use existing venv or create new one
-    if existing_venv:
+    if existing_venv and not config['force']:
         venv_dir = existing_venv
     else:
         # Create new venv
@@ -169,6 +169,11 @@ def setup_virtual_environment(config):
         else:
             venv_dir = config['home'] / 'venv'
             print_colored("📦 Creating standard venv", Colors.BLUE)
+        
+        # Remove existing venv if force reinstall
+        if venv_dir.exists() and config['force']:
+            print_colored(f"🗑️  Removing existing {venv_dir.name}", Colors.YELLOW)
+            shutil.rmtree(venv_dir)
         
         if not run_command(f"{sys.executable} -m venv {venv_dir}", config['home']):
             print_colored("❌ Failed to create virtual environment", Colors.RED)
