@@ -33,6 +33,13 @@ new_algorithm → REPLACE_entirely NO_legacy_paths
 selected_solution → COMMIT_fully NO_safety_nets
 migration_means → FULL_replacement NO_backward_compat
 
+NO_ROOT_POLLUTION_EVER
+temp_test_debug → NEVER_in_root USE_tmp/
+documentation → ONLY_README.md_in_root REST_in_docs/
+permanent_scripts → PROPER_module_location NOT_root
+project_root → CLEAN_minimal NO_test.py_debug.py
+organize_by_purpose → tmp/_temporary docs/_documentation src/_code
+
 FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv .local
 NEED_PERMISSION modify delete create refactor install git_push package_changes
 
