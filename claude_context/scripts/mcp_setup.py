@@ -72,19 +72,43 @@ def install_mcp_memory():
     python_exe = get_python_executable()
     print(f"  🐍 Using Python: {python_exe}")
     
+    # Set up environment for macOS C++ compilation
+    env = os.environ.copy()
+    if platform.system() == "Darwin":
+        # Check for SDK path
+        sdk_paths = [
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+        ]
+        
+        for sdk_path in sdk_paths:
+            if Path(sdk_path).exists():
+                print(f"  🔧 Setting up macOS SDK paths for C++ compilation")
+                env["SDKROOT"] = sdk_path
+                env["CPLUS_INCLUDE_PATH"] = f"{sdk_path}/usr/include/c++/v1:{env.get('CPLUS_INCLUDE_PATH', '')}"
+                break
+    
     try:
         # Install mcp-memory-service from GitHub
         subprocess.run([
             python_exe, "-m", "pip", "install", 
             "git+https://github.com/doobidoo/mcp-memory-service.git"
-        ], check=True)
+        ], check=True, env=env)
         
         print("  ✅ MCP Memory Service installed in venv")
         return True
         
     except subprocess.CalledProcessError as e:
         print(f"  ⚠️  Failed to install MCP Memory Service: {e}")
-        print("  Try manual installation:")
+        
+        if platform.system() == "Darwin":
+            print("\n  💡 macOS C++ compilation issue detected")
+            print("  Try running: xcode-select --install")
+            print("  Or manually set SDK paths and retry:")
+            print(f"    export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
+            print(f"    export CPLUS_INCLUDE_PATH=$SDKROOT/usr/include/c++/v1:$CPLUS_INCLUDE_PATH")
+        
+        print(f"\n  Manual installation command:")
         print(f"    {python_exe} -m pip install git+https://github.com/doobidoo/mcp-memory-service.git")
         return False
 
