@@ -30,16 +30,26 @@ curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/instal
 CLAUDE_FORCE=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3
 ```
 
-### Installation with MCP Memory Service
+### Installation with MCP Memory Service (Optional)
 
-**Prerequisites for MCP** (optional, only if using MCP):
-- macOS: Xcode Command Line Tools (`xcode-select --install`)
-- Linux: Build essentials (`apt-get install build-essential`)
+MCP provides semantic memory for Claude but requires C++ compilation tools. **Claude Context Box works perfectly without it.**
 
 ```bash
-# Install with MCP Memory Service enabled
+# Try to install with MCP (will install Claude Context Box even if MCP fails)
 MCP_ENABLE=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3
 ```
+
+**If MCP installation fails**, Claude Context Box will still be installed. To add MCP later:
+
+1. **Install compilation tools for your OS:**
+   - macOS: `xcode-select --install`
+   - Ubuntu/Debian: `sudo apt-get install build-essential python3-dev`
+   - RHEL/Fedora: `sudo yum groupinstall "Development Tools"`
+   - Windows: Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
+
+2. **Run MCP setup:**
+   - In Claude: type `mcp`
+   - Or manually: `python3 .claude/mcp_setup.py`
 
 ## Quick Commands
 
