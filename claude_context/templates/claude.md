@@ -44,7 +44,7 @@ FORBIDDEN_ZONES venv __pycache__ .git node_modules .env dist build .eggs .venv .
 NEED_PERMISSION modify delete create refactor install git_push package_changes
 
 8STEP_MANDATORY_PROCEDURE
-1_read PROJECT.llm understand_architecture
+1_read PROJECT.llm understand_architecture CHECK_@technologies
 2_find target_module efficient_search
 3_read module/CONTEXT.llm understand_interface
 4_PLAN approach WITH_ULTRATHINK consider_all_impacts trace_dependencies
@@ -74,8 +74,16 @@ no_user_prompts → UNLESS_explicitly_requested
 task_plan → FULL_EXECUTION_no_pauses
 if_task_list → COMPLETE_ENTIRE_PLAN
 
+TECHNOLOGY_AWARENESS_MANDATORY
+PROJECT.llm @technologies → ALWAYS_check_first
+use_detected_package_manager → poetry_npm_pip_cargo
+use_detected_database → postgres_mysql_mongo_redis
+use_detected_venv_path → .venv_venv_pipenv
+respect_framework_patterns → django_fastapi_flask_react
+follow_testing_conventions → pytest_unittest_jest
+
 CONTROL_POINTS_MANDATORY
-before_change read_PROJECT.llm understand_system
+before_change read_PROJECT.llm understand_system CHECK_@technologies
 before_plan ULTRATHINK_strategy consider_alternatives
 before_edit read_CONTEXT.llm understand_contract
 during_analysis ULTRATHINK_dependencies trace_impacts

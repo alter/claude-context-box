@@ -222,6 +222,131 @@ def analyze_dependencies(modules):
     
     return deps
 
+def detect_technologies():
+    """Detect technologies used in the project"""
+    technologies = {}
+    
+    # Package managers
+    if os.path.exists('poetry.lock') or os.path.exists('pyproject.toml'):
+        with open('pyproject.toml', 'r') as f:
+            if '[tool.poetry]' in f.read():
+                technologies['package_manager'] = 'Poetry (.venv/bin/activate or poetry shell)'
+    elif os.path.exists('Pipfile'):
+        technologies['package_manager'] = 'Pipenv (pipenv shell)'
+    elif os.path.exists('requirements.txt'):
+        technologies['package_manager'] = 'pip (venv/bin/activate or .venv/bin/activate)'
+    elif os.path.exists('package.json'):
+        if os.path.exists('yarn.lock'):
+            technologies['package_manager'] = 'Yarn (yarn install)'
+        else:
+            technologies['package_manager'] = 'npm (npm install)'
+    elif os.path.exists('Cargo.toml'):
+        technologies['package_manager'] = 'Cargo (cargo build)'
+    elif os.path.exists('go.mod'):
+        technologies['package_manager'] = 'Go Modules (go mod download)'
+    
+    # Databases
+    db_indicators = {
+        'psycopg2': 'PostgreSQL',
+        'pg8000': 'PostgreSQL', 
+        'asyncpg': 'PostgreSQL',
+        'pymongo': 'MongoDB',
+        'motor': 'MongoDB',
+        'pymysql': 'MySQL',
+        'mysqlclient': 'MySQL',
+        'redis': 'Redis',
+        'sqlite3': 'SQLite',
+        'cassandra': 'Cassandra',
+        'elasticsearch': 'Elasticsearch'
+    }
+    
+    # Check requirements for database hints
+    req_files = ['requirements.txt', 'Pipfile', 'pyproject.toml']
+    for req_file in req_files:
+        if os.path.exists(req_file):
+            with open(req_file, 'r') as f:
+                content = f.read().lower()
+                for lib, db in db_indicators.items():
+                    if lib in content:
+                        technologies['database'] = db
+                        break
+    
+    # Frameworks
+    framework_files = {
+        'manage.py': 'Django',
+        'wsgi.py': 'Flask/Django',
+        'asgi.py': 'FastAPI/Django',
+    }
+    
+    for file, framework in framework_files.items():
+        if os.path.exists(file):
+            technologies['framework'] = framework
+            break
+    
+    # Check for FastAPI/Flask in main.py/app.py
+    if os.path.exists('main.py'):
+        with open('main.py', 'r') as f:
+            if 'fastapi' in f.read().lower():
+                technologies['framework'] = 'FastAPI'
+    elif os.path.exists('app.py'):
+        with open('app.py', 'r') as f:
+            content = f.read().lower()
+            if 'flask' in content:
+                technologies['framework'] = 'Flask'
+            elif 'fastapi' in content:
+                technologies['framework'] = 'FastAPI'
+    
+    # Frontend frameworks
+    if os.path.exists('package.json'):
+        with open('package.json', 'r') as f:
+            pkg = f.read()
+            if 'react' in pkg:
+                technologies['frontend'] = 'React'
+            elif 'vue' in pkg:
+                technologies['frontend'] = 'Vue.js'
+            elif 'angular' in pkg:
+                technologies['frontend'] = 'Angular'
+            elif 'svelte' in pkg:
+                technologies['frontend'] = 'Svelte'
+    
+    # CI/CD
+    if os.path.exists('.github/workflows'):
+        technologies['ci_cd'] = 'GitHub Actions'
+    elif os.path.exists('.gitlab-ci.yml'):
+        technologies['ci_cd'] = 'GitLab CI'
+    elif os.path.exists('Jenkinsfile'):
+        technologies['ci_cd'] = 'Jenkins'
+    elif os.path.exists('.circleci'):
+        technologies['ci_cd'] = 'CircleCI'
+    
+    # Containers
+    if os.path.exists('Dockerfile'):
+        technologies['container'] = 'Docker'
+    if os.path.exists('docker-compose.yml') or os.path.exists('docker-compose.yaml'):
+        technologies['orchestration'] = 'Docker Compose'
+    if os.path.exists('kubernetes') or os.path.exists('k8s'):
+        technologies['orchestration'] = 'Kubernetes'
+    
+    # Testing
+    if os.path.exists('pytest.ini'):
+        technologies['testing'] = 'pytest'
+    elif os.path.exists('setup.cfg'):
+        with open('setup.cfg', 'r') as f:
+            if 'pytest' in f.read():
+                technologies['testing'] = 'pytest'
+    elif os.path.exists('tests') or os.path.exists('test'):
+        technologies['testing'] = 'unittest/pytest'
+    
+    # Virtual environment
+    if os.path.exists('.venv'):
+        technologies['venv'] = '.venv (source .venv/bin/activate)'
+    elif os.path.exists('venv'):
+        technologies['venv'] = 'venv (source venv/bin/activate)'
+    elif os.path.exists('Pipfile'):
+        technologies['venv'] = 'pipenv (pipenv shell)'
+    
+    return technologies
+
 def create_project_llm(modules, dependencies):
     """Create or update PROJECT.llm with full dependency tracking"""
     now = datetime.now().isoformat()
@@ -230,6 +355,7 @@ def create_project_llm(modules, dependencies):
     existing_changes = []
     existing_version = "0.1.0"
     existing_paths = []
+    existing_technologies = {}
     existing_project_name = os.path.basename(os.getcwd())
     
     if os.path.exists('PROJECT.llm'):
@@ -261,12 +387,24 @@ def create_project_llm(modules, dependencies):
         except:
             pass
     
+    # Detect technologies
+    technologies = detect_technologies()
+    
     # Start building content
     content = f"""@project: {existing_project_name}
 @version: {existing_version}
 @updated: {now}
 
-@architecture:"""
+@technologies:"""
+    
+    # Add detected technologies
+    if technologies:
+        for tech_type, tech_value in technologies.items():
+            content += f"\n- {tech_type}: {tech_value}"
+    else:
+        content += "\n# No technologies detected"
+    
+    content += "\n\n@architecture:"""
     
     # Add modules with their dependencies and purpose
     for module_path in sorted(modules.keys()):
