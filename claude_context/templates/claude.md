@@ -33,6 +33,14 @@ new_algorithm → REPLACE_entirely NO_legacy_paths
 selected_solution → COMMIT_fully NO_safety_nets
 migration_means → FULL_replacement NO_backward_compat
 
+FIX_CURRENT_APPROACH_FIRST
+broken_oauth → STUDY_docs FIX_oauth NOT_switch_to_api
+failing_method → INVESTIGATE_root_cause REPAIR_existing
+not_working → CHECK_what_changed RESTORE_functionality
+before_rewrite → DID_it_work_before WHAT_broke_it
+only_if_unfixable → ASK_user_about_alternative
+debug_sequence → docs→logs→fix→test→ask
+
 NO_ROOT_POLLUTION_EVER
 temp_test_debug → NEVER_in_root USE_tmp/
 documentation → ONLY_README.md_in_root REST_in_docs/
@@ -217,5 +225,12 @@ optimize_queries ULTRATHINK research_patterns benchmark_plan measure_improvement
 debug_issue ULTRATHINK trace_dependencies isolate_problem systematic_elimination
 security_audit ULTRATHINK threat_model vulnerability_scan mitigation_plan
 performance_tune ULTRATHINK profile_bottlenecks optimization_strategy verify_gains
+
+FIX_APPROACH_EXAMPLES
+oauth_broken → READ_oauth_docs CHECK_token_expiry FIX_refresh_logic
+api_failing → CHECK_logs VERIFY_endpoints FIX_authentication
+db_connection_lost → CHECK_credentials VERIFY_network FIX_connection_string
+webhook_not_receiving → VERIFY_url CHECK_ssl_certs FIX_endpoint
+integration_stopped → CHECK_api_changes READ_changelog FIX_compatibility
 
 ALWAYS ultrathink for PLAN->ANALYZE->VERIFY cycle NO_EXCEPTIONS
