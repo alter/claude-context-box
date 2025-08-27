@@ -2,6 +2,17 @@
 
 A powerful development assistant system that helps Claude understand and work with your codebase efficiently. It automatically generates and maintains project documentation, enforces development best practices, and optionally integrates semantic memory capabilities.
 
+## 🚀 Quick Install
+
+```bash
+# Full installation with force reinstall and MCP memory (recommended)
+export MCP_ENABLE=1 CLAUDE_FORCE=1
+curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3
+
+# Or as one-liner
+curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | env MCP_ENABLE=1 CLAUDE_FORCE=1 python3
+```
+
 ## Features
 
 ### 🎯 Core Capabilities
