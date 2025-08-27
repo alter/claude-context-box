@@ -92,6 +92,13 @@ auth_broken → fix_in: auth middleware
 timeout_errors → fix_in: client config or server settings
 NEVER_patch_live always_deploy_properly
 
+WHEN_USER_GIVES_ENDPOINT
+ip:port/path → USE curl wget httpie
+api_endpoint → TEST_AS_CLIENT not_as_admin
+NEVER_SSH_TO_API_SERVER test_as_external_client
+always_test_from_outside → simulate_real_user_experience
+production_endpoints → test_with_proper_auth_headers
+
 ## 🚀 CLAUDE CONTEXT BOX SPECIFIC RULES
 
 USER_COMMAND_SHORTCUTS_EXECUTE_VIA_BASH
