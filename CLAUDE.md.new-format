@@ -49,13 +49,6 @@
     <example_wrong>kubectl exec pod -- python -c "fix"</example_wrong>
     <example_correct>edit source.py, commit, rebuild</example_correct>
   </stop>
-  
-  <stop>
-    <trigger>user gives endpoint to test</trigger>
-    <action>test as external client with curl/httpie</action>
-    <example_wrong>ssh to server to test API</example_wrong>
-    <example_correct>curl http://api.example.com:8080/endpoint</example_correct>
-  </stop>
 </critical_stops>
 
 <golden_rules>
@@ -117,12 +110,6 @@
     <name>Ultrathink for complexity</name>
     <rationale>Deep analysis prevents disasters</rationale>
     <validation>Used ultrathink for complex tasks?</validation>
-  </rule>
-  
-  <rule number="11">
-    <name>Fix current approach first</name>
-    <rationale>Existing solution worked before, find what broke</rationale>
-    <validation>Did you try to fix existing before switching approach?</validation>
   </rule>
 </golden_rules>
 
@@ -226,69 +213,19 @@
   </hypothesis_formation>
 </diagnosis_protocol>
 
-<executable_shortcuts>
-  <important>These are IMMEDIATE EXECUTABLE COMMANDS. When user types the shortcut, execute the command directly without explanation.</important>
-  
-  <shortcut trigger="u">
-    <description>Update all project context files</description>
-    <execute>$(python3 .claude/get_python.py) .claude/update.py</execute>
-    <when_to_use>User types just "u" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="c">
-    <description>Check project health</description>
-    <execute>$(python3 .claude/get_python.py) .claude/check.py</execute>
-    <when_to_use>User types just "c" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="s">
-    <description>Show project structure</description>
-    <execute>cat PROJECT.llm</execute>
-    <when_to_use>User types just "s" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="h">
-    <description>Show help information</description>
-    <execute>$(python3 .claude/get_python.py) .claude/help.py</execute>
-    <when_to_use>User types just "h" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="validate">
-    <description>Run validation checks</description>
-    <execute>$(python3 .claude/get_python.py) .claude/validation.py</execute>
-    <when_to_use>User types "validate" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="deps">
-    <description>Show dependency graph</description>
-    <execute>cat PROJECT.llm | grep -A20 "@dependency_graph"</execute>
-    <when_to_use>User types "deps" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="ctx_init">
-    <description>Initialize context files</description>
-    <execute>$(python3 .claude/get_python.py) .claude/context.py init</execute>
-    <when_to_use>User types "ctx_init" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="ctx_update">
-    <description>Update context files</description>
-    <execute>$(python3 .claude/get_python.py) .claude/context.py update</execute>
-    <when_to_use>User types "ctx_update" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="cc">
-    <description>Clean code interactively</description>
-    <execute>$(python3 .claude/get_python.py) .claude/cleancode.py --interactive</execute>
-    <when_to_use>User types "cc" as command</when_to_use>
-  </shortcut>
-  
-  <shortcut trigger="mcp">
-    <description>Setup MCP configuration</description>
-    <execute>MCP_AUTO_SETUP=1 $(python3 .claude/get_python.py) .claude/mcp_setup.py</execute>
-    <when_to_use>User types "mcp" as command</when_to_use>
-  </shortcut>
-</executable_shortcuts>
+## SHORTCUTS
+```
+u → .claude/update.py
+c → .claude/check.py
+s → cat PROJECT.llm
+h → .claude/help.py
+validate → .claude/validation.py
+deps → grep @dependency_graph PROJECT.llm
+ctx_init → .claude/context.py init
+ctx_update → .claude/context.py update
+cc → .claude/cleancode.py --interactive
+mcp → MCP_AUTO_SETUP=1 .claude/mcp_setup.py
+```
 
 ## MCP_MEMORY (if enabled)
 ```
@@ -313,7 +250,7 @@ Examples:
 <context_files>
   <file name="CONTEXT.llm">
     <location>Every working directory</location>
-    <never_create_in>.venv/, venv/, .local/, __pycache__, /tmp/, node_modules/, .checkpoints/</never_create_in>
+    <never_create_in>.venv/, venv/, .local/, __pycache__, /tmp/, node_modules/</never_create_in>
     <structure>
       last_updated: ISO timestamp
       directory: current path
@@ -346,7 +283,6 @@ Examples:
         package_manager: poetry|pip|pipenv
         database: postgresql|mysql|mongodb
         framework: fastapi|django|flask
-        venv: .venv|venv|pipenv
       tech_stack:
         details of stack
       @dependency_graph:
@@ -456,7 +392,7 @@ WITH: read,test,search,analyze,backup,document
 
 ## FORBIDDEN_ZONES
 ```
-NEVER_TOUCH: .venv/,venv/,__pycache__/,.git/,node_modules/,.env,dist/,build/,.eggs/,.local/,.checkpoints/
+NEVER_TOUCH: .venv/,venv/,__pycache__/,.git/,node_modules/,.env,dist/,build/,.eggs/,.local/
 NEVER_CREATE: *_new.py,*_v2.py,*_final.py,*_copy.py,*_backup.py,*_enhanced.py
 NO_ROOT_POLLUTION: test.py,debug.py,temp.py → use tmp/
 ```
