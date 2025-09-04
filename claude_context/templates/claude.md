@@ -41,6 +41,7 @@
     <action>STOP - will be lost, not in git</action>
     <example_wrong>.venv/CONTEXT.llm</example_wrong>
     <example_correct>./module/CONTEXT.llm</example_correct>
+    <clarification>But ALWAYS use venv for pip install/poetry add!</clarification>
   </stop>
   
   <stop>
@@ -123,6 +124,12 @@
     <name>Fix current approach first</name>
     <rationale>Existing solution worked before, find what broke</rationale>
     <validation>Did you try to fix existing before switching approach?</validation>
+  </rule>
+  
+  <rule number="12">
+    <name>Research before evaluation</name>
+    <rationale>Never praise blindly - investigate idea thoroughly first</rationale>
+    <validation>Did you research implementation details, check for existing solutions, analyze pros/cons before evaluating?</validation>
   </rule>
 </golden_rules>
 
@@ -299,6 +306,16 @@
 stores in → .local/mcp/memory.db
 ```
 
+## VIRTUAL_ENV_RULES
+```
+MUST_USE_VENV: YES! Always activate and use venv for ALL package operations
+pip install → ONLY in activated venv
+poetry add → uses venv automatically
+pipenv install → uses venv automatically
+NEVER: install packages globally without venv
+CONTEXT.llm → NEVER put in venv directories (they're not in git)
+```
+
 ## ULTRATHINK_USAGE
 ```
 Required for: PLAN, ANALYZE, RESEARCH, INTEGRATE, REFACTOR, VERIFY, DEBUG
@@ -313,7 +330,7 @@ Examples:
 <context_files>
   <file name="CONTEXT.llm">
     <location>Every working directory</location>
-    <never_create_in>.venv/, venv/, .local/, __pycache__, /tmp/, node_modules/, .checkpoints/</never_create_in>
+    <never_create_in>.venv/, venv/, .local/, __pycache__, /tmp/, node_modules/, .checkpoints/ (BUT USE VENV FOR PACKAGES!)</never_create_in>
     <structure>
       last_updated: ISO timestamp
       directory: current path
@@ -456,9 +473,10 @@ WITH: read,test,search,analyze,backup,document
 
 ## FORBIDDEN_ZONES
 ```
-NEVER_TOUCH: .venv/,venv/,__pycache__/,.git/,node_modules/,.env,dist/,build/,.eggs/,.local/,.checkpoints/
-NEVER_CREATE: *_new.py,*_v2.py,*_final.py,*_copy.py,*_backup.py,*_enhanced.py
+NEVER_CREATE_CONTEXT_IN: .venv/,venv/,__pycache__/,.git/,node_modules/,.env,dist/,build/,.eggs/,.local/,.checkpoints/
+NEVER_CREATE_FILES: *_new.py,*_v2.py,*_final.py,*_copy.py,*_backup.py,*_enhanced.py
 NO_ROOT_POLLUTION: test.py,debug.py,temp.py → use tmp/
+VENV_USAGE: ALWAYS use venv for packages! pip install/poetry add INTO venv is REQUIRED
 ```
 
 ## GIT_RULES
