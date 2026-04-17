@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# Real curl-from-github e2e test.
+#
+# Run this AFTER pushing your changes to the github remote — it tests the
+# actual one-liner that users will paste from the README, no local
+# bare-clone simulation. Spins up a clean python:3.11-slim container, runs
+#   curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/$REF/install.py | python3 -
+# inside it, and asserts the full install + auto-update + pre-commit flow.
+#
+# Usage:
+#   bash tests/e2e/run_real_curl.sh                    # tests the main branch
+#   CCB_REF=feature/foo bash tests/e2e/run_real_curl.sh
+set -euo pipefail
+
+REF="${CCB_REF:-main}"
+REPO="${CCB_GH_REPO:-alter/claude-context-box}"
+
+cat <<EOF
+Real curl-install e2e test
+  repo:   github.com/$REPO
+  branch: $REF
+
+This requires the latest changes to already be pushed to the remote.
+Paste the same one-liner the README advertises into a clean container and
+verify nothing was missed.
+EOF
+
+container_script=$(cat <<'INNER'
+set -euo pipefail
+fail() { echo "FAIL: $*" >&2; exit 1; }
+ok()   { echo "  ok: $*"; }
+
+# Build a small fake target project.
+mkdir -p /work/target/src/api /work/target/src/db /work/target/tests
+cat > /work/target/src/api/handler.py <<'PY'
+"""Public API handlers."""
+def hello(name: str) -> str:
+    return f"hello, {name}"
+PY
+cat > /work/target/src/api/__init__.py <<'PY'
+"""HTTP layer."""
+PY
+cat > /work/target/src/db/models.py <<'PY'
+"""Domain models."""
+class User:
+    def __init__(self, name): self.name = name
+PY
+cat > /work/target/src/db/__init__.py <<'PY'
+""""""
+PY
+cat > /work/target/CLAUDE.md <<'MD'
+# my project
+USER RULE: do not delete src/db/models.py
+MD
+cat > /work/target/pyproject.toml <<'TOML'
+[project]
+name = "demo"
+version = "0.1.0"
+TOML
+
+# THE RUN — exactly the one-liner from the README.
+cd /work/target
+curl -sSL "https://raw.githubusercontent.com/${CCB_GH_REPO}/${CCB_REF}/install.py" | CCB_DIR=/work/target python3 -
+
+# ----- assertions on what landed -----
+[ -f /work/target/.claude/bin/ccb ]                    || fail "shim missing"
+[ -d /work/target/.claude/ccb-venv ]                   || fail "venv missing"
+[ -d /work/target/.claude/skills ]                     || fail "skills missing"
+[ -d /work/target/.claude/hooks ]                      || fail "hooks missing"
+[ -d /work/target/.claude/ccb-engine ]                 || fail "ccb-engine missing"
+[ -d /work/target/.claude/ccb-git ]                    || fail "ccb-git missing"
+[ -f /work/target/.claude/settings.json ]              || fail "settings.json missing"
+ok "all expected paths created"
+
+grep -q "ccb:begin" /work/target/CLAUDE.md             || fail "ccb begin marker missing"
+grep -q "USER RULE: do not delete" /work/target/CLAUDE.md \
+    || fail "user content was clobbered"
+ok "CLAUDE.md merged additively"
+
+grep -q "CLAUDE_PROJECT_DIR.*ccb-venv/bin/python" /work/target/.claude/settings.json \
+    || fail "settings.json hooks not pointing at venv python"
+ok "settings.json hooks use venv python via \${CLAUDE_PROJECT_DIR}"
+
+# Shim works.
+/work/target/.claude/bin/ccb status > /work/status.out
+grep -q "ccb section in CLAUDE.md: True" /work/status.out \
+    || fail "shim ccb status reported wrong state"
+ok "shim ccb status works"
+
+# Engine runs.
+/work/target/.claude/bin/ccb update > /dev/null
+[ -f /work/target/PROJECT.llm ]                        || fail "PROJECT.llm not generated"
+[ -f /work/target/src/api/CONTEXT.llm ]                || fail "src/api/CONTEXT.llm not generated"
+grep -q "def hello" /work/target/src/api/CONTEXT.llm   || fail "exports not extracted"
+ok "ccb update via shim regenerates PROJECT.llm + CONTEXT.llm"
+
+# SessionStart hook.
+echo '{}' | CLAUDE_PROJECT_DIR=/work/target \
+    /work/target/.claude/ccb-venv/bin/python /work/target/.claude/hooks/session_start.py \
+    > /work/start.out
+python3 -c "
+import json, sys
+d = json.loads(open('/work/start.out').read() or '{}')
+ctx = d.get('hookSpecificOutput',{}).get('additionalContext','')
+assert 'PROJECT.llm' in ctx, 'session_start did not inject PROJECT.llm'
+"
+ok "SessionStart hook injects PROJECT.llm"
+
+# End-of-session auto-update flow.
+sleep 1.1
+cat >> /work/target/src/api/handler.py <<'PY'
+
+def goodbye(name): return f"bye, {name}"
+PY
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/work/target/src/api/handler.py"}}' \
+    | CLAUDE_PROJECT_DIR=/work/target \
+      /work/target/.claude/ccb-venv/bin/python /work/target/.claude/hooks/post_tool_use.py >/dev/null
+echo '{"transcript_path":"/tmp/x","last_assistant_message":"added goodbye"}' \
+    | CLAUDE_PROJECT_DIR=/work/target \
+      /work/target/.claude/ccb-venv/bin/python /work/target/.claude/hooks/session_end.py >/dev/null
+
+for _ in $(seq 1 100); do
+    if grep -q "def goodbye" /work/target/src/api/CONTEXT.llm 2>/dev/null; then
+        break
+    fi
+    sleep 0.1
+done
+grep -q "def goodbye" /work/target/src/api/CONTEXT.llm \
+    || fail "background worker did not pick up new export"
+ok "SessionEnd background worker auto-refreshed CONTEXT.llm"
+
+# Optional pre-commit hook.
+cd /work/target
+git init -q
+git config user.email e2e@example.com
+git config user.name  E2E
+bash .claude/ccb-git/install.sh > /dev/null
+[ -f .git/hooks/pre-commit ]                           || fail "pre-commit hook not installed"
+git add -A
+git commit -q -m initial                                || fail "pre-commit hook errored on real commit"
+ok "pre-commit hook installs and runs on a real commit"
+
+echo
+echo "==> ALL REAL-CURL E2E ASSERTIONS PASSED"
+INNER
+)
+
+docker run --rm \
+    -e CCB_GH_REPO="$REPO" \
+    -e CCB_REF="$REF" \
+    python:3.11-slim \
+    bash -c "
+        apt-get update -qq && apt-get install -qq -y curl git ca-certificates >/dev/null
+        $container_script
+    "
