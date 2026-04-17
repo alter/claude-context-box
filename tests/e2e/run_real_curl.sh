@@ -156,8 +156,11 @@ INNER
 docker run --rm \
     -e CCB_GH_REPO="$REPO" \
     -e CCB_REF="$REF" \
+    -e DEBIAN_FRONTEND=noninteractive \
+    -e TERM=xterm \
     python:3.11-slim \
     bash -c "
-        apt-get update -qq && apt-get install -qq -y curl git ca-certificates >/dev/null
+        apt-get update -qq >/dev/null
+        apt-get install -qq -y --no-install-recommends curl git ca-certificates >/dev/null 2>&1
         $container_script
     "
