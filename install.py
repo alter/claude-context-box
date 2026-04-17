@@ -25,12 +25,18 @@ from pathlib import Path
 
 GITHUB_REPO = "alter/claude-context-box"
 DEFAULT_REF = "main"
+DEFAULT_REPO_URL = f"https://github.com/{GITHUB_REPO}.git"
+DEFAULT_TARBALL_URL = f"https://codeload.github.com/{GITHUB_REPO}/tar.gz/refs/heads"
 
 
 def main() -> int:
     target_dir = Path(os.environ.get("CCB_DIR", os.getcwd())).resolve()
     ref = os.environ.get("CCB_REF", DEFAULT_REF)
     force = os.environ.get("CCB_FORCE", "").lower() in {"1", "true", "yes"}
+    # CCB_REPO_URL lets tests / forks point at an alternate git remote
+    # (file:// paths and bare repos are supported).
+    repo_url = os.environ.get("CCB_REPO_URL", DEFAULT_REPO_URL)
+    tarball_base = os.environ.get("CCB_TARBALL_URL", DEFAULT_TARBALL_URL)
 
     if sys.version_info < (3, 10):
         sys.stderr.write(
@@ -39,27 +45,27 @@ def main() -> int:
         return 1
 
     print(f"ccb installer: ref={ref}  target={target_dir}")
+    print(f"  source: {repo_url}")
 
     with tempfile.TemporaryDirectory(prefix="ccb-install-") as tmp:
-        source_root = _fetch(ref, Path(tmp))
+        source_root = _fetch(ref, Path(tmp), repo_url, tarball_base)
         return _run_ccb_install(source_root, target_dir, force)
 
 
-def _fetch(ref: str, tmp_dir: Path) -> Path:
+def _fetch(ref: str, tmp_dir: Path, repo_url: str, tarball_base: str) -> Path:
     """Fetch ccb source. Prefer git clone; fall back to tarball download."""
     if shutil.which("git"):
         repo_dir = tmp_dir / "repo"
-        print(f"cloning github.com/{GITHUB_REPO}@{ref} ...")
+        print(f"cloning {repo_url}@{ref} ...")
         rc = subprocess.call(
-            ["git", "clone", "--depth", "1", "--branch", ref,
-             f"https://github.com/{GITHUB_REPO}.git", str(repo_dir)],
+            ["git", "clone", "--depth", "1", "--branch", ref, repo_url, str(repo_dir)],
             stdout=subprocess.DEVNULL,
         )
         if rc == 0:
             return repo_dir
         print("git clone failed; falling back to tarball download")
 
-    url = f"https://codeload.github.com/{GITHUB_REPO}/tar.gz/refs/heads/{ref}"
+    url = f"{tarball_base}/{ref}"
     print(f"downloading {url} ...")
     with urllib.request.urlopen(url) as resp:
         data = resp.read()
