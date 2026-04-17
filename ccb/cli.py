@@ -19,6 +19,20 @@ def main(argv: list[str] | None = None) -> int:
     p_uninstall = sub.add_parser("uninstall", help="Remove ccb block from target CLAUDE.md")
     p_uninstall.add_argument("--dir", default=".")
 
+    p_gh = sub.add_parser(
+        "install-git-hook",
+        help="Install optional pre-commit hook that refreshes contexts on each commit",
+    )
+    p_gh.add_argument("--dir", default=".")
+    p_gh.add_argument("--force", action="store_true",
+                      help="Overwrite an existing non-ccb pre-commit hook")
+
+    p_ugh = sub.add_parser(
+        "uninstall-git-hook",
+        help="Remove the ccb pre-commit hook (leaves non-ccb hooks alone)",
+    )
+    p_ugh.add_argument("--dir", default=".")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "install":
@@ -33,6 +47,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "uninstall":
         from ccb.installer.main import uninstall
         return uninstall(target_dir=args.dir)
+    if args.cmd == "install-git-hook":
+        from ccb.installer.git_hook import install as install_git_hook
+        from pathlib import Path as _P
+        return install_git_hook(_P(args.dir), force=args.force)
+    if args.cmd == "uninstall-git-hook":
+        from ccb.installer.git_hook import uninstall as uninstall_git_hook
+        from pathlib import Path as _P
+        return uninstall_git_hook(_P(args.dir))
 
     parser.print_help()
     return 1

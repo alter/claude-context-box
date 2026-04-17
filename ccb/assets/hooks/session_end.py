@@ -3,8 +3,14 @@
 
 Best-effort — the hook has a short timeout (default 1.5s, configurable via
 CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS). We do the cheap work here (record
-which files changed, append a stub entry) and defer LLM summarization to a
-background job that the hook spawns and returns from immediately.
+which files changed, append a log entry) and defer two slower jobs to a
+background process that the hook spawns and returns from immediately:
+
+  1. Incremental context refresh: update.py --paths <changed dirs>
+  2. (phase F) LLM summary of the transcript via claude-agent-sdk
+
+The background process gets the list of changed files via a one-shot file
+written before state.json is reset.
 """
 from __future__ import annotations
 
@@ -55,26 +61,34 @@ def run() -> None:
             preview = last_msg.splitlines()[0][:160]
             fh.write(f"- last assistant turn: {preview}\n")
 
+    # Hand the changed-files list to the background worker via a one-shot
+    # file (so it survives the state.json reset below).
+    handoff = root / ".ccb" / "handoff.json"
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    import json as _json
+    handoff.write_text(
+        _json.dumps({"changed_files": changed, "transcript": transcript}),
+        encoding="utf-8",
+    )
+
     # Reset the changed-files tracker for the next session.
     state["changed_files"] = []
     state["last_session_end"] = _now_iso()
     write_state(state, root)
 
-    # Spawn a no-op background placeholder. In phase D we'll have it call
-    # claude-agent-sdk for a real LLM summary; for now just touch a marker file
-    # so we know the slot exists.
-    _spawn_background_summary(root, transcript)
+    # Spawn the worker: incremental context refresh + (phase F) LLM summary.
+    _spawn_background_worker(root, handoff)
 
     write_output({})
 
 
-def _spawn_background_summary(root: Path, transcript: str) -> None:
+def _spawn_background_worker(root: Path, handoff: Path) -> None:
     helper = root / ".claude" / "ccb-engine" / "capture_session.py"
     if not helper.exists():
         return
     try:
         subprocess.Popen(
-            [sys.executable, str(helper), transcript],
+            [sys.executable, str(helper), str(handoff)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,

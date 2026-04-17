@@ -1,21 +1,35 @@
 #!/usr/bin/env python3
 """SessionStart hook: inject project context so Claude doesn't re-scan on every open.
 
-Reads PROJECT.llm and the most recent daily log, returns them via
-hookSpecificOutput.additionalContext so they land in the system prompt.
+Steps:
+  1. If PROJECT.llm is missing or older than its source files, run update.py
+     synchronously to bring contexts up to date (the user might have edited
+     files between sessions in another tool).
+  2. Read PROJECT.llm and the most recent daily log.
+  3. Return them via hookSpecificOutput.additionalContext so they land in the
+     system prompt.
+
+The synchronous update is bounded to keep session-start latency reasonable —
+worst case 30 seconds, normal case milliseconds when contexts are fresh.
 """
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _lib import ccb_dir, project_root, read_input, safe_main, write_output  # noqa: E402
 
+UPDATE_TIMEOUT_SECONDS = 30
+
 
 def run() -> None:
-    read_input()  # consume any payload Claude Code sends
+    read_input()
     root = project_root()
+
+    _refresh_if_stale(root)
 
     parts: list[str] = []
 
@@ -48,6 +62,55 @@ def run() -> None:
             }
         }
     )
+
+
+def _refresh_if_stale(root: Path) -> None:
+    """Run update.py synchronously if PROJECT.llm doesn't reflect the source tree."""
+    update_script = root / ".claude" / "ccb-engine" / "update.py"
+    if not update_script.exists():
+        return
+
+    project_llm = root / "PROJECT.llm"
+    if project_llm.exists() and not _is_stale(project_llm, root):
+        return
+
+    # Allow the user to disable the auto-refresh entirely (e.g. on huge repos
+    # where the latency is unwelcome).
+    if os.environ.get("CCB_DISABLE_AUTO_UPDATE", "").lower() in {"1", "true", "yes"}:
+        return
+
+    try:
+        subprocess.run(
+            [sys.executable, str(update_script)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=UPDATE_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        # safe_main will log; we still inject whatever PROJECT.llm exists.
+        pass
+
+
+def _is_stale(project_llm: Path, root: Path) -> bool:
+    """True if any tracked source file is newer than PROJECT.llm."""
+    cutoff = project_llm.stat().st_mtime
+    # Cheap heuristic: only check top-level dirs to keep the scan O(top-level).
+    skip = {".git", ".venv", "venv", "env", "__pycache__", "node_modules",
+            "dist", "build", ".eggs", ".local", ".ccb", ".claude"}
+    for d in root.iterdir():
+        if not d.is_dir() or d.name in skip or d.name.startswith("."):
+            continue
+        for p in d.rglob("*"):
+            if not p.is_file():
+                continue
+            if p.suffix in {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"}:
+                try:
+                    if p.stat().st_mtime > cutoff:
+                        return True
+                except OSError:
+                    continue
+    return False
 
 
 if __name__ == "__main__":

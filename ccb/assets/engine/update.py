@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Regenerate PROJECT.llm and per-module CONTEXT.llm from the source tree.
 
-Designed to be cheap and incremental:
-- PROJECT.llm always rewritten (it's small and reflects top-level layout).
-- CONTEXT.llm written per directory containing source files; existing files are
-  overwritten to keep them in sync with the code.
+Modes:
+  python update.py                    # full refresh: PROJECT.llm + every CONTEXT.llm
+  python update.py --paths a/ b/c/    # incremental: PROJECT.llm + only those dirs
+                                      #   (paths can be files; their parent dir is used)
 """
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -25,18 +26,62 @@ from _lib import (  # noqa: E402
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="ccb context update")
+    parser.add_argument(
+        "--paths",
+        nargs="+",
+        default=None,
+        help="Refresh CONTEXT.llm only in these dirs (or parents of these files)",
+    )
+    args = parser.parse_args()
+
     root = project_root()
     print(f"ccb update: {root}")
 
     write_project_llm(root)
 
-    code_dirs = iter_code_dirs(root)
-    print(f"  scanning {len(code_dirs)} code dirs")
-    for d in code_dirs:
+    if args.paths:
+        targets = _resolve_targets(args.paths, root)
+        print(f"  incremental: refreshing {len(targets)} dir(s)")
+    else:
+        targets = iter_code_dirs(root)
+        print(f"  full refresh: scanning {len(targets)} code dirs")
+
+    for d in targets:
         write_context_llm(d, root)
 
     print("ccb update: done")
     return 0
+
+
+def _resolve_targets(paths: list[str], root: Path) -> list[Path]:
+    """Map an arbitrary list of paths (relative or absolute, files or dirs) to
+    the unique set of directories whose CONTEXT.llm needs refreshing."""
+    seen: dict[Path, None] = {}
+    for p in paths:
+        candidate = (root / p) if not Path(p).is_absolute() else Path(p)
+        candidate = candidate.resolve()
+        d = candidate if candidate.is_dir() else candidate.parent
+        if not d.exists() or root not in d.parents and d != root:
+            continue
+        if d == root:
+            # Root-level edits shouldn't write CONTEXT.llm into the project root.
+            continue
+        if not _has_source_file(d):
+            continue
+        seen[d] = None
+    return list(seen.keys())
+
+
+def _has_source_file(d: Path) -> bool:
+    try:
+        return any(_is_source_file(p) for p in d.iterdir() if p.is_file())
+    except OSError:
+        return False
+
+
+def _is_source_file(p: Path) -> bool:
+    return p.suffix in {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".rb"}
 
 
 def write_project_llm(root: Path) -> None:

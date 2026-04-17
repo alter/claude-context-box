@@ -138,6 +138,60 @@ def test_instructions_loaded_silent_when_fresh(tmp_path: Path) -> None:
 # safety net -------------------------------------------------------------
 
 
+def test_session_start_auto_refresh_when_project_llm_missing(tmp_path: Path) -> None:
+    """SessionStart should run update.py synchronously if PROJECT.llm is absent."""
+    # Lay out a minimal target that mirrors a real install.
+    engine_dst = tmp_path / ".claude" / "ccb-engine"
+    engine_dst.mkdir(parents=True)
+    engine_src = Path(__file__).parent.parent / "ccb" / "assets" / "engine"
+    for f in engine_src.iterdir():
+        if f.is_file():
+            (engine_dst / f.name).write_bytes(f.read_bytes())
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "__init__.py").write_text('"""Demo."""\n')
+    (tmp_path / "src" / "foo.py").write_text("def bar(): ...\n")
+
+    out = _run_hook("session_start.py", {}, tmp_path)
+    assert (tmp_path / "PROJECT.llm").exists(), "session_start should auto-create PROJECT.llm"
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "PROJECT.llm" in ctx
+
+
+def test_session_end_writes_handoff_and_spawns_worker(tmp_path: Path) -> None:
+    """SessionEnd records changed files via a handoff JSON for the background worker."""
+    state = tmp_path / ".ccb" / "state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"changed_files": ["src/api/handler.py"]}))
+
+    # Provide a fake worker that records its argv into a marker file so we can
+    # verify SessionEnd actually invoked it with the handoff path.
+    engine_dir = tmp_path / ".claude" / "ccb-engine"
+    engine_dir.mkdir(parents=True)
+    marker = tmp_path / "worker-was-called.txt"
+    (engine_dir / "capture_session.py").write_text(
+        "import sys, pathlib\n"
+        f"pathlib.Path(r'{marker}').write_text('|'.join(sys.argv[1:]))\n"
+    )
+
+    _run_hook(
+        "session_end.py",
+        {"transcript_path": "/tmp/x", "last_assistant_message": "done"},
+        tmp_path,
+    )
+
+    # Background spawn is async — give it a moment to write the marker.
+    import time
+    deadline = time.time() + 2
+    while not marker.exists() and time.time() < deadline:
+        time.sleep(0.05)
+    assert marker.exists(), "SessionEnd did not spawn the background worker"
+    handoff_path = marker.read_text()
+    # The handoff file is consumed by the worker, but the path passed in must
+    # have pointed at .ccb/handoff.json.
+    assert ".ccb" in handoff_path and "handoff.json" in handoff_path
+
+
 @pytest.mark.parametrize(
     "hook",
     ["session_start.py", "session_end.py", "pre_compact.py", "post_tool_use.py", "instructions_loaded.py"],

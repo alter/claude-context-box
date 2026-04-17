@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ccb pre-commit hook
+# Refreshes ccb context files for staged changes and re-stages them if tracked.
+# Installed via: `ccb install-git-hook`
+# Remove via: rm .git/hooks/pre-commit  (or replace with your own)
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ENGINE="$REPO_ROOT/.claude/ccb-engine/update.py"
+
+if [ ! -f "$ENGINE" ]; then
+    exit 0  # ccb not installed in this repo — pass through silently
+fi
+
+# Collect unique parent dirs of staged source files.
+# (Plain shell — works on bash 3.2 / macOS; no mapfile / arrays-of-strings.)
+staged_dirs="$(
+    git diff --cached --name-only --diff-filter=ACMR \
+        | grep -E '\.(py|ts|tsx|js|jsx|go|rs|java|rb)$' \
+        | sed 's|/[^/]*$||' \
+        | sort -u
+)"
+
+if [ -z "$staged_dirs" ]; then
+    exit 0
+fi
+
+# Refresh contexts for those dirs (PROJECT.llm always refreshed).
+# shellcheck disable=SC2086  # intentional word-splitting on $staged_dirs
+python3 "$ENGINE" --paths $staged_dirs >/dev/null
+
+# Re-stage any context files that git already tracks (so they ride along with
+# this commit). Untracked files are left untracked — ccb doesn't push them in.
+restage() {
+    local f="$1"
+    if [ -f "$f" ] && git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+        git add "$f"
+    fi
+}
+
+restage "$REPO_ROOT/PROJECT.llm"
+echo "$staged_dirs" | while IFS= read -r d; do
+    [ -n "$d" ] && restage "$REPO_ROOT/$d/CONTEXT.llm"
+done
+
+exit 0

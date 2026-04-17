@@ -16,11 +16,23 @@ trap 'rm -rf "$WORK"' EXIT
 
 echo "==> work dir: $WORK"
 
-# ---- 1. Build a local bare-git "remote" from the current source tree --------
+# ---- 1. Build a local bare-git "remote" snapshotting the WORKING TREE -------
+# We snapshot the working tree (committed + uncommitted) into a fresh bare repo
+# so the test exercises whatever the developer is about to commit, not the
+# stale HEAD. Using `git stash create` produces a virtual commit covering both
+# tracked and untracked changes; we then push it as the remote's HEAD branch.
 REMOTE="$WORK/remote.git"
-git clone --quiet --bare "$REPO_ROOT" "$REMOTE"
 BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)"
-echo "==> built local bare remote at $REMOTE (branch: $BRANCH)"
+git init --quiet --bare --initial-branch="$BRANCH" "$REMOTE"
+
+stash_sha="$(git -C "$REPO_ROOT" stash create --include-untracked || true)"
+if [ -n "$stash_sha" ]; then
+    git -C "$REPO_ROOT" push --quiet "$REMOTE" "$stash_sha:refs/heads/$BRANCH"
+    echo "==> snapshotted working tree (stash $stash_sha) into $REMOTE"
+else
+    git -C "$REPO_ROOT" push --quiet "$REMOTE" "HEAD:refs/heads/$BRANCH"
+    echo "==> pushed clean HEAD into $REMOTE (no uncommitted changes)"
+fi
 
 # ---- 2. Create fake target project with subdirs and existing CLAUDE.md ------
 TARGET="$WORK/hello-world"
@@ -146,23 +158,67 @@ assert '@language: python' in ctx, 'session_start did not include language line'
 " || fail "session_start hook output missing expected keys"
 ok "session_start hook injects PROJECT.llm into additionalContext"
 
-# ---- 10. PostToolUse hook tracks edits, SessionEnd drains them -------------
-echo "==> hooks: PostToolUse + SessionEnd"
-echo '{"tool_name": "Edit", "tool_input": {"file_path": "'"$TARGET"'/src/api/handler.py"}}' \
+# ---- 10. Realistic end-of-session flow: edit → PostToolUse → SessionEnd
+#         → background worker refreshes CONTEXT.llm with the new exports.
+echo "==> end-of-session auto-update flow"
+sleep 1.1  # mtime granularity (the engine touched CONTEXT.llm in step 6)
+cat >> "$TARGET/src/api/handler.py" <<'PY'
+
+def goodbye(name: str) -> str:
+    return f"goodbye, {name}"
+PY
+prev_mtime=$(stat -f %m "$TARGET/src/api/CONTEXT.llm" 2>/dev/null \
+    || stat -c %Y "$TARGET/src/api/CONTEXT.llm")
+
+echo '{"tool_name":"Edit","tool_input":{"file_path":"'"$TARGET"'/src/api/handler.py"}}' \
     | CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/hooks/post_tool_use.py" >/dev/null
 grep -q "src/api/handler.py" "$TARGET/.ccb/state.json" \
     || fail "post_tool_use did not record the edit"
-ok "post_tool_use records edits in .ccb/state.json"
+ok "post_tool_use recorded the edit in .ccb/state.json"
 
-echo '{"transcript_path": "/tmp/fake.jsonl", "last_assistant_message": "shipped feature X"}' \
+echo '{"transcript_path":"/tmp/fake.jsonl","last_assistant_message":"added goodbye"}' \
     | CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/hooks/session_end.py" >/dev/null
 ls "$TARGET/.ccb/daily_log/"*.md >/dev/null 2>&1 \
     || fail "session_end did not write a daily log"
-grep -q "shipped feature X" "$TARGET/.ccb/daily_log/"*.md \
-    || fail "session_end did not record last assistant message"
-ok "session_end drains state into daily log"
+grep -q "added goodbye" "$TARGET/.ccb/daily_log/"*.md \
+    || fail "session_end did not record the last assistant message"
+ok "session_end appended summary to daily log"
 
-# ---- 11. Uninstall ---------------------------------------------------------
+# Wait for the background worker to refresh CONTEXT.llm + verify content.
+for _ in $(seq 1 100); do
+    cur_mtime=$(stat -f %m "$TARGET/src/api/CONTEXT.llm" 2>/dev/null \
+        || stat -c %Y "$TARGET/src/api/CONTEXT.llm")
+    if [ "$cur_mtime" != "$prev_mtime" ] && grep -q "def goodbye" "$TARGET/src/api/CONTEXT.llm"; then
+        break
+    fi
+    sleep 0.1
+done
+[ "$cur_mtime" != "$prev_mtime" ] \
+    || fail "CONTEXT.llm not refreshed by SessionEnd background worker"
+grep -q "def goodbye" "$TARGET/src/api/CONTEXT.llm" \
+    || fail "refreshed CONTEXT.llm missing the new export 'goodbye'"
+ok "background worker refreshed CONTEXT.llm with new exports"
+
+# ---- 12. Optional pre-commit hook -----------------------------------------
+echo "==> optional pre-commit hook"
+git -C "$TARGET" init -q
+git -C "$TARGET" config user.email "e2e@example.com"
+git -C "$TARGET" config user.name  "E2E"
+
+PYTHONPATH="$REPO_ROOT" python3 -m ccb install-git-hook --dir "$TARGET" >/dev/null
+[ -f "$TARGET/.git/hooks/pre-commit" ] || fail "pre-commit hook not installed"
+ok "pre-commit hook installed"
+
+# Verify it runs cleanly when there are no staged changes.
+git -C "$TARGET" add -A
+git -C "$TARGET" commit -q -m "initial" || fail "pre-commit hook errored on first commit"
+ok "pre-commit hook runs without errors on a real commit"
+
+PYTHONPATH="$REPO_ROOT" python3 -m ccb uninstall-git-hook --dir "$TARGET" >/dev/null
+[ ! -f "$TARGET/.git/hooks/pre-commit" ] || fail "pre-commit hook not removed by uninstall"
+ok "pre-commit hook removable"
+
+# ---- 13. Uninstall ---------------------------------------------------------
 echo "==> uninstall"
 PYTHONPATH="$REPO_ROOT" python3 -m ccb uninstall --dir "$TARGET" >/dev/null
 grep -q "ccb:begin" "$TARGET/CLAUDE.md" \

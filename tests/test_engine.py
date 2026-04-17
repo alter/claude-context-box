@@ -175,6 +175,51 @@ def test_validate_errors_when_project_llm_missing(tmp_path: Path) -> None:
 # cleancode.py -----------------------------------------------------------
 
 
+def test_update_paths_flag_only_touches_listed_dirs(tmp_path: Path) -> None:
+    _make_project(tmp_path)
+    _run("update.py", tmp_path)
+
+    # Capture mtimes after the full refresh.
+    api_ctx = tmp_path / "src" / "api" / "CONTEXT.llm"
+    db_ctx = tmp_path / "src" / "db" / "CONTEXT.llm"
+    api_mtime = api_ctx.stat().st_mtime
+    db_mtime = db_ctx.stat().st_mtime
+
+    # Force a discernible mtime gap, then incremental-refresh only src/api/.
+    import os, time
+    time.sleep(0.05)
+    proc = subprocess.run(
+        [sys.executable, str(ENGINE_DIR / "update.py"),
+         "--paths", str(tmp_path / "src" / "api")],
+        capture_output=True,
+        text=True,
+        env={"CLAUDE_PROJECT_DIR": str(tmp_path), "PATH": ""},
+        timeout=10,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+    assert api_ctx.stat().st_mtime > api_mtime, "src/api CONTEXT.llm should be refreshed"
+    assert db_ctx.stat().st_mtime == db_mtime, "src/db CONTEXT.llm should NOT be refreshed"
+
+
+def test_update_paths_accepts_files_and_resolves_to_parent(tmp_path: Path) -> None:
+    _make_project(tmp_path)
+    _run("update.py", tmp_path)
+
+    api_ctx = tmp_path / "src" / "api" / "CONTEXT.llm"
+    api_ctx.unlink()
+    proc = subprocess.run(
+        [sys.executable, str(ENGINE_DIR / "update.py"),
+         "--paths", str(tmp_path / "src" / "api" / "handler.py")],
+        capture_output=True,
+        text=True,
+        env={"CLAUDE_PROJECT_DIR": str(tmp_path), "PATH": ""},
+        timeout=10,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert api_ctx.exists(), "passing a file path should refresh its parent dir"
+
+
 def test_cleancode_finds_unreferenced_function(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "__init__.py").write_text("")

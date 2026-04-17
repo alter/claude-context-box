@@ -58,10 +58,23 @@ Environment variables for non-default installs:
 | `CCB_FORCE` | `0` | Overwrite `.claude/{skills,hooks,ccb-engine}` instead of merging |
 | `CCB_REPO_URL` | `https://github.com/alter/claude-context-box.git` | Alternate source (used by tests, mirrors, forks) |
 
-## After install
+## How automatic context maintenance works
+
+| When | What happens | Hook |
+|---|---|---|
+| Session starts | If `PROJECT.llm` is missing or older than the source tree, `update.py` runs synchronously. Then `PROJECT.llm` + the latest daily log are injected into the system prompt. | `SessionStart` |
+| Claude edits a file | The file path is appended to `.ccb/state.json`. | `PostToolUse` |
+| Claude Code compresses the context | A snapshot is written to `.ccb/daily_log/<date>.md`. | `PreCompact` |
+| Session ends | The change list is handed off to a background worker that refreshes the affected `CONTEXT.llm` files (incremental — only touched dirs) and appends a summary to today's daily log. | `SessionEnd` |
+| `CLAUDE.md` / `.claude/rules/*.md` reload | If `PROJECT.llm` is missing or >7 days old, a `systemMessage` warning is emitted. | `InstructionsLoaded` |
+
+You can opt out of the synchronous SessionStart refresh on huge repos:
+`export CCB_DISABLE_AUTO_UPDATE=1`.
+
+## Manual escape hatches
 
 Lifecycle is automatic — there's nothing to type at session start. You only
-invoke the skills manually when you want to.
+invoke the skills manually when you want to override the defaults.
 
 | Slash command | What it runs |
 |---|---|
@@ -77,7 +90,31 @@ CLI equivalents (handy in scripts and CI):
 ccb status
 ccb update
 ccb uninstall --dir /path/to/project
+ccb install-git-hook --dir .       # optional pre-commit integration (below)
+ccb uninstall-git-hook --dir .
 ```
+
+## Optional: pre-commit integration
+
+By default, ccb refreshes contexts on session boundaries. If your team commits
+`PROJECT.llm` / `CONTEXT.llm` files into git (i.e. you removed them from
+`.gitignore`), you may also want them refreshed and re-staged on every commit:
+
+```bash
+ccb install-git-hook
+```
+
+What it does:
+
+- If `.pre-commit-config.yaml` exists, prints the snippet to add to that
+  config and does nothing else (don't fight the [pre-commit framework](https://pre-commit.com/)).
+- Otherwise installs `.git/hooks/pre-commit` — but **only if no pre-commit
+  hook already exists**. Use `--force` to replace a non-ccb hook.
+- The hook runs `update.py --paths <staged dirs>` and re-stages only the
+  context files that git already tracks. Untracked context files stay
+  untracked (it never starts checking in files you didn't choose to commit).
+
+Remove with `ccb uninstall-git-hook` (refuses to remove a non-ccb hook).
 
 ## What lives where in the target project
 
@@ -150,13 +187,13 @@ bash tests/e2e/run_docker_e2e.sh # same but in a clean container
 
 ## Roadmap
 
-- **Phase D — LLM-summarized session capture.** `capture_session.py` currently
-  writes a stub entry; it'll call `claude-agent-sdk` (Haiku) to produce
-  structured decisions/issues sections from the transcript.
-- **Phase E — Wiki layer.** Optional `compile_wiki.py` that turns daily logs
+- **Phase F — LLM-summarized session capture.** `capture_session.py` already
+  refreshes contexts; the slot for an LLM-generated decisions/issues summary
+  via `claude-agent-sdk` (Haiku) is reserved but not yet wired.
+- **Phase G — Wiki layer.** Optional `compile_wiki.py` that turns daily logs
   into a structured `.ccb/wiki/` (Karpathy-style "knowledge as code"), plus a
   `query_wiki.py` CLI for terminal queries without opening Claude Code.
-- **Phase F — Plugin packaging.** Ship as a Claude Code plugin so the
+- **Phase H — Plugin packaging.** Ship as a Claude Code plugin so the
   installation path becomes `/plugin install ccb` instead of `curl ... | python3`.
 
 ## License
