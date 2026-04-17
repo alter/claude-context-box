@@ -85,6 +85,10 @@ ok "settings.json hooks use venv python via \${CLAUDE_PROJECT_DIR}"
 /work/target/.claude/bin/ccb status > /work/status.out
 grep -q "ccb section in CLAUDE.md: True" /work/status.out \
     || fail "shim ccb status reported wrong state"
+grep -qE "[0-9]+ ccb hook\(s\)" /work/status.out \
+    || fail "shim ccb status missed hooks count"
+grep -qE "[0-9]+ skill\(s\)" /work/status.out \
+    || fail "shim ccb status missed skills count"
 ok "shim ccb status works"
 
 # install.py advertises that PROJECT.llm + CONTEXT.llm are populated

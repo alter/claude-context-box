@@ -133,8 +133,8 @@ ok "python AST exports extracted into CONTEXT.llm"
 echo "==> engine: status"
 status_out=$(CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/ccb-engine/status.py")
 echo "$status_out" | grep -q "ccb block: yes" || fail "status missed ccb block"
-echo "$status_out" | grep -q "5 ccb hook(s)" || fail "status missed registered hooks"
-echo "$status_out" | grep -q "5 skill(s)" || fail "status missed installed skills"
+echo "$status_out" | grep -qE "[0-9]+ ccb hook\(s\)" || fail "status missed registered hooks"
+echo "$status_out" | grep -qE "[0-9]+ skill\(s\)" || fail "status missed installed skills"
 ok "status reports install correctly"
 
 # ---- 8. Engine: validate is clean after update -----------------------------

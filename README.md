@@ -306,11 +306,44 @@ bash tests/e2e/run_local_e2e.sh  # end-to-end against a local bare clone
 bash tests/e2e/run_docker_e2e.sh # same but in a clean container
 ```
 
+### Optional: wiki layer (Karpathy-style knowledge base)
+
+Daily logs accumulate raw session-by-session events; the wiki turns them into
+a topic-organized knowledge base with cross-references. Same dependency as
+Phase F (`anthropic` SDK + `ANTHROPIC_API_KEY`).
+
+**Compile** the wiki from your daily logs:
+
+```bash
+.claude/bin/ccb wiki compile                # all logs
+.claude/bin/ccb wiki compile --since 30d    # last 30 days only
+.claude/bin/ccb wiki compile --dry-run      # preview without writing
+```
+
+Or invoke `/ccb-wiki` from inside Claude Code.
+
+Output: `.ccb/wiki/index.md` (topic index with cross-links) +
+`.ccb/wiki/topics/<slug>.md` (one article per concept extracted from the
+logs, each with summary / decisions / open issues / modules touched / related
+topics / source-log references).
+
+**Query** the wiki without opening Claude Code:
+
+```bash
+.claude/bin/ccb wiki query "what did we decide about auth?"
+.claude/bin/ccb wiki query "any open issues with the rate limiter?"
+```
+
+The CLI loads the wiki, asks Haiku to answer grounded in those documents,
+and prints the response. Useful in shell sessions, scripts, or as a sanity
+check before opening a long-form Claude Code session.
+
 ## Roadmap
 
-- **Phase G — Wiki layer.** Optional `compile_wiki.py` that turns daily logs
-  into a structured `.ccb/wiki/` (Karpathy-style "knowledge as code"), plus a
-  `query_wiki.py` CLI for terminal queries without opening Claude Code.
+The 0.3.0 architecture is feature-complete for the goals it set out to meet
+(self-maintaining context with native Claude Code primitives). Future work
+is iterative — sharper heuristics in the engine, richer SessionEnd capture,
+better cross-language support — not new architecture.
 
 Out of scope: Claude Code plugin packaging. The plugin format manages
 skills / hooks via symlinks but cannot do the `CLAUDE.md` merge, venv setup,

@@ -176,6 +176,46 @@ def update() -> int:
     return rc
 
 
+def wiki(subcmd: str, args) -> int:
+    """`ccb wiki compile` / `ccb wiki query` — proxies to engine scripts."""
+    target = Path.cwd().resolve()
+    if is_ccb_source_repo(target):
+        print(f"this is the ccb source repo, not a target install: {target}")
+        return 0
+
+    engine_dir = target / ".claude" / "ccb-engine"
+    if subcmd == "compile":
+        script = engine_dir / "compile_wiki.py"
+        extra: list[str] = []
+        if getattr(args, "since", None):
+            extra += ["--since", args.since]
+        if getattr(args, "dry_run", False):
+            extra += ["--dry-run"]
+        return _run_engine_script(target, script, extra)
+    if subcmd == "query":
+        script = engine_dir / "query_wiki.py"
+        question = " ".join(args.question) if isinstance(args.question, list) else str(args.question)
+        return _run_engine_script(target, script, [question])
+    print(f"unknown wiki subcommand: {subcmd}", file=sys.stderr)
+    return 2
+
+
+def _run_engine_script(target: Path, script: Path, args: list[str]) -> int:
+    if not script.exists():
+        print(f"engine script missing: {script}", file=sys.stderr)
+        return 1
+    venv_python = target / ".claude" / "ccb-venv" / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
+    python_cmd = str(venv_python) if venv_python.exists() else sys.executable
+    proc = subprocess.run(
+        [python_cmd, str(script), *args],
+        cwd=str(target),
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(target)},
+    )
+    return proc.returncode
+
+
 def uninstall(target_dir: str = ".") -> int:
     target = Path(target_dir).resolve()
     assert_not_source(target)

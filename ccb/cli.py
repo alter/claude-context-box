@@ -19,6 +19,14 @@ def main(argv: list[str] | None = None) -> int:
     p_uninstall = sub.add_parser("uninstall", help="Remove ccb block from target CLAUDE.md")
     p_uninstall.add_argument("--dir", default=".")
 
+    p_wiki = sub.add_parser("wiki", help="Compile or query the project wiki")
+    wiki_sub = p_wiki.add_subparsers(dest="wiki_cmd", required=True)
+    p_wc = wiki_sub.add_parser("compile", help="Compile .ccb/daily_log/* into .ccb/wiki/")
+    p_wc.add_argument("--since", default=None, help="Only logs from the last N days (e.g. 7d)")
+    p_wc.add_argument("--dry-run", action="store_true")
+    p_wq = wiki_sub.add_parser("query", help="Answer a question from the compiled wiki")
+    p_wq.add_argument("question", nargs="+", help="The question to ask")
+
     p_gh = sub.add_parser(
         "install-git-hook",
         help="Install optional pre-commit hook that refreshes contexts on each commit",
@@ -47,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "uninstall":
         from ccb.installer.main import uninstall
         return uninstall(target_dir=args.dir)
+    if args.cmd == "wiki":
+        from ccb.installer.main import wiki
+        return wiki(args.wiki_cmd, args)
     if args.cmd == "install-git-hook":
         from ccb.installer.git_hook import install as install_git_hook
         from pathlib import Path as _P
