@@ -11,6 +11,7 @@ Project context lives in:
 - `<module>/CONTEXT.llm` — per-module interface contract (auto-updated)
 - `.ccb/daily_log/<YYYY-MM-DD>.md` — session summaries (auto-captured)
 
-Slash commands installed under `.claude/skills/ccb-*` cover manual operations
-(`/ccb-update`, `/ccb-status`, `/ccb-validate`, `/ccb-cleancode`). Lifecycle
+Slash commands installed under `.claude/skills/ccb-*` cover manual operations:
+`/ccb-update`, `/ccb-status`, `/ccb-validate`, `/ccb-cleancode`, `/ccb-deps`,
+and `/ccb-wiki` (the last requires the optional `[llm]` extra). Lifecycle
 hooks under `.claude/hooks/` keep contexts current automatically.

@@ -1,0 +1,344 @@
+ cat CLAUDE.md
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Goal
+
+Build an ML model that predicts BTC price direction (BUY/HOLD/SELL) from multi-timeframe candle data, backtest with money management, optimize via grid search with walk-forward validation, and run live trading on Bybit via 4-model hierarchical ensemble.
+
+## Development Commands
+
+Everything runs in Docker. No local Python environment is expected.
+
+**ВАЖНО: `docker compose restart` vs `docker compose up -d`**
+- `docker compose restart <service>` — только перезапускает СУЩЕСТВУЮЩИЙ контейнер. НЕ применяет изменения в docker-compose.yml (volumes, env, ports и т.д.).
+- `docker compose up -d <service>` — пересоздаёт контейнер если конфигурация изменилась. **Всегда используй `up -d` после изменений в docker-compose.yml.**
+- Source code монтируется через volumes (indicator-calculator, live-bot, ML-сервисы) — изменения Python-файлов подхватываются при `up -d` без `docker compose build`.
+
+```bash
+# Build all images
+make build
+# or: docker compose build
+
+# Start infrastructure (TimescaleDB, stream-updater, indicator-calculator, web-ui)
+docker compose up -d timescaledb bybit-stream indicator-calculator web-ui
+
+# ML pipeline (each step depends on previous)
+docker compose --profile parquet run --rm ml-parquet-builder      # Step 1: DB -> Parquet (preferred)
+docker compose run --rm ml-cache-builder                          # Step 1 alt: DB -> numpy cache (legacy)
+docker compose run --rm ml-dataset-generator \                    # Step 2: cache/parquet -> features HDF5
+  python -m ml.scripts.generate_dataset --norm-mode pct_change --use-cache
+docker compose run --rm ml-target-generator \                     # Step 3: generate targets HDF5
+  python -m ml.scripts.generate_targets \
+    --source /app/data/datasets/<dataset_file>.hdf5 \
+    --cache-dir /data/tmp/ml_cache \
+    --ratio 3 --threshold 0.5 --max-candles 100 \
+    --conf-threshold 2.0 --conf-ratio 5.0 --hold-max-move 0.3
+docker compose --profile training run --rm ml-training            # Step 4: train model (GPU)
+docker compose --profile backtest run --rm ml-backtest            # Step 5: backtest (GPU)
+docker compose --profile autotune run --rm ml-autotune            # Step 6: autotune backtest params (GPU)
+
+# 3/4-Model hierarchy pipeline
+docker compose --profile regime-targets run --rm ml-regime-targets
+docker compose --profile m1-hmm run --rm ml-m1-hmm
+docker compose --profile swing-targets run --rm ml-swing-targets
+docker compose --profile m2-training run --rm ml-m2-training
+docker compose --profile meta-features run --rm ml-meta-features
+docker compose --profile meta-train run --rm ml-meta-train
+docker compose --profile regime-m3-train run --rm ml-regime-m3-train
+docker compose --profile 3model-backtest run --rm ml-3model-backtest
+docker compose --profile 3model-autotune run --rm ml-3model-autotune
+
+# Live trading bot (swing)
+docker compose --profile live build live-bot
+docker compose --profile live up -d live-bot-swing
+docker compose --profile live logs -f live-bot-swing
+docker compose --profile live restart live-bot-swing
+
+# Alternative training pipelines
+docker compose --profile rl run --rm ml-rl-training               # RL agent training (GPU)
+
+# Data fetching
+docker compose --profile bybit-fetch run --rm bybit-fetcher       # Fetch historical candles from Bybit
+
+# Utilities
+make stats          # DB statistics
+make gaps-check FROM="2025-01-01" TO="2025-01-31"  # Check data gaps
+make gaps-fill  FROM="2025-01-01" TO="2025-01-31"  # Fill data gaps
+```
+
+### Running Tests
+
+No formal test framework (no pytest, no CI). Test scripts were removed during code cleanup (see PLAN.md tasks 6-9 — remaining).
+
+### No Linting/Formatting
+
+No linting or formatting tools are configured (no flake8, ruff, black, mypy, pre-commit).
+
+### Note on Dependencies
+
+Dependencies live only inside Docker. Key deps defined in `Dockerfile.training`:
+- **Base image**: `nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04` with Python 3.12
+- **Core**: `torch` (cu128, Blackwell sm_120), `numpy`, `h5py`, `comet-ml`
+- **ML extras**: `lightgbm`, `stable-baselines3`, `gymnasium`, `joblib`
+- `requirements-training.txt` lists `h5py`, `comet-ml`, `fastapi`, `uvicorn`, `pydantic`, `psycopg2-binary`; everything else installed directly in Dockerfile
+
+**Dockerfile.live** (live bot, CPU-only):
+- Base image: `python:3.12-slim`
+- `pybit>=5.6.0,<6.0` (Bybit SDK), `lightgbm`, `hmmlearn`, `joblib`, `scikit-learn`
+- PyTorch CPU-only for inference (~5ms per prediction)
+
+---
+
+## Architecture
+
+Full architecture documentation is in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## КРИТИЧЕСКИЕ ПРАВИЛА ДЛЯ CLAUDE
+
+### OPUS = ОРКЕСТРАТОР. Две обязанности: ДЕЛЕГИРОВАТЬ и ПРОВЕРЯТЬ.
+
+**1) ДЕЛЕГИРОВАТЬ:**
+- **Haiku-агент** — ВСЕ Bash-команды (docker, git, системные, проверки)
+- **Sonnet-агент** — написание кода (Opus даёт ТЗ, Sonnet реализует)
+- Opus пишет код напрямую ТОЛЬКО для тривиальных правок (1-5 строк)
+- Opus выполняет Bash напрямую ТОЛЬКО когда результат нужен для принятия решения в том же шаге
+
+**2) ПРОВЕРЯТЬ (после КАЖДОГО возврата агента):**
+- Агент вернул реальный output (логи, diff, статус) → ОК, двигаемся дальше
+- Агент вернул "task created" / пустой результат / планирование → ПРОВАЛ, перезапустить немедленно
+- Мусорные таски → удалить сразу (TaskUpdate status=deleted)
+- НЕ писать пользователю "готово" без подтверждённого результата
+- НЕ обходить delegation hook — хук экономит токены
+
+### ЗАПРЕЩЕНО:
+1. **НЕ используй Claude API** - только CLI: `claude -p "prompt"`
+2. **НЕ используй anthropic библиотеку** - только subprocess
+3. **НЕ предлагай CLAUDE_API_KEY** - не существует для CLI
+4. **АБСОЛЮТНЫЙ ЗАПРЕТ НА ТИХИЕ FALLBACK-Ы** — НИГДЕ, включая live-бот. Fallback допустим ИСКЛЮЧИТЕЛЬНО когда альтернатива РАВНОЗНАЧНА (одни и те же данные через другой API endpoint). ЗАПРЕЩЕНО молча переключаться на другой режим/модель/механизм/алгоритм. Если конфигурация неполная или некорректная — код ДОЛЖЕН упасть с ошибкой и уведомить, а НЕ молча деградировать. Пример катастрофы: `MULTI_MODEL=false` как дефолт → бот молча торговал неделю одиночной моделью вместо 4-model пайплайна, потеряв реальные деньги.
+
+### ОБЯЗАТЕЛЬНО:
+1. **ЧИТАЙ CLAUDE.md перед ЛЮБОЙ задачей** — всегда, без исключений
+2. **ЧИТАЙ код перед изменениями** — не предполагай, не угадывай
+3. **ПРОВЕРЯЙ Bybit API docs** — поля могут отличаться
+4. **ТЕСТИРУЙ на testnet** — всегда сначала testnet
+5. **ЛОГИРУЙ все AI решения** — для аудита
+6. **ВАЛИДИРУЙ AI output** — не доверяй слепо
+7. **ТАБЛИЦЫ — ВСЕ ДАННЫЕ** — если составляешь таблицу, заполняй ВСЕ ячейки. Никаких "?", прочерков или пропущенных колонок. Данные либо есть и показаны, либо ты сначала их получаешь, потом показываешь таблицу. Неполная таблица = мусор.
+8. **ДЕЛАЙ ДО КОНЦА** — не предлагай "хочешь запустить?", а запускай. Не спрашивай разрешение на очевидные шаги. Если задача подразумевает действие — делай его, не останавливайся на полпути. Полумеры и поделки не принимаются, нужно готовое решение.
+9. **ПРОВЕРЯЙ НА ТИПИЧНЫЕ БАГИ** — после написания ЛЮБОГО кода, сверяй с [TYPICAL_BUGS.md](TYPICAL_BUGS.md). Чеклист в конце файла — обязателен перед коммитом. Типичные баги: look-ahead в targets, train/test overlap, entry по close вместо next open, silent fallbacks, trailing stop по close вместо H/L.
+10. **DUAL REPORTING** — в КАЖДОМ отчёте бэктеста показывать ОБА: compound return (production sizing) И fixed-size return (sum PnL / initial_balance). Compound без fixed-size = вводит в заблуждение. Всегда указывать: период (даты), количество дней, initial balance, position sizing %.
+11. **ТЕСТОВЫЙ ПЕРИОД** — 63 дня / 27 сделок = статистически ненадёжно. Использовать WFO multi-fold (n_folds≥3) для финальной оценки. Автотюн ОБЯЗАТЕЛЕН после любого retrain — параметры (SL, TP, conf, pos_size, trailing) подбираются заново.
+
+### ПЕРЕД ЛЮБЫМИ ИЗМЕНЕНИЯМИ:
+```python
+# 1. Прочитай релевантные файлы
+grep -n "function_name" file.py
+
+# 2. Проверь текущую реализацию
+cat file.py | grep -A 10 "class Name"
+
+# currentDate
+Today's date is 2026-03-05.
+```
+
+<!-- ccb:begin -->
+<!-- ccb version: 0.3.0-dev — do not edit between markers; changes will be overwritten on reinstall -->
+
+## ccb-managed context
+
+This block is maintained by [Claude Context Box](https://github.com/alter/claude-context-box).
+It tells Claude how the project is organized and how to keep documentation in sync.
+**Do not edit between the markers** — changes will be overwritten on the next reinstall.
+Add your own rules above or below the markers; ccb only owns this section.
+
+Project context lives in:
+
+- `PROJECT.llm` — architecture map (auto-updated by hooks)
+- `<module>/CONTEXT.llm` — per-module interface contract (auto-updated)
+- `.ccb/daily_log/<YYYY-MM-DD>.md` — session summaries (auto-captured)
+
+Slash commands installed under `.claude/skills/ccb-*` cover manual operations
+(`/ccb-update`, `/ccb-status`, `/ccb-validate`, `/ccb-cleancode`). Lifecycle
+hooks under `.claude/hooks/` keep contexts current automatically.
+
+## Critical stops
+
+When any of these triggers fires, stop and switch to the correct action before
+continuing.
+
+| Trigger | Wrong | Correct |
+|---|---|---|
+| ssh to API endpoint | `ssh root@host curl ...` | `curl -v http://host:8080/api` |
+| edit inside container | `kubectl exec pod -- vi` | edit source, rebuild image |
+| `pip install` in poetry project | `pip install requests` | `poetry add requests` |
+| `permission denied` error | rewrite the auth system | `chmod +x script.sh` first |
+| thinking about a rewrite | start refactoring immediately | diagnose for 5 minutes |
+| writing `CONTEXT.llm` in `.venv/` | `.venv/CONTEXT.llm` (lost) | `./module/CONTEXT.llm` |
+| runtime fix attempt | `kubectl exec pod -- python -c ...` | edit source, commit, rebuild |
+| user gives an HTTP endpoint to test | ssh to the server | curl/httpie as an external client |
+
+Use venv (`.venv/`, `venv/`) for **package installation** — but never put
+`CONTEXT.llm` files inside it; venvs are not committed.
+
+## Golden rules
+
+1. **Fix in source, not at runtime.** Runtime patches die on restart.
+2. **Complete every requested task or none.** Partial work wastes time and breaks trust.
+3. **Diagnose for 5 minutes before fixing.** Check permissions, env vars, running services first.
+4. **Use what exists; don't create parallel solutions.** Read `services/`, `lib/`, helpers before adding new code.
+5. **Right tool for the job.** HTTP for APIs, not SSH. SQL for queries, not shell loops.
+6. **Update context after every meaningful change.** PROJECT.llm and CONTEXT.llm reflect reality, not wishes.
+7. **No mocks in production code paths.** Test data lives in tests/ only.
+8. **Test what you ship.** "Should work" means "doesn't work" until proven by an actual run.
+9. **Be honest about status.** Trust outweighs the comfort of false success reports.
+10. **Use ultrathink for complex tasks.** Plan, analyze, refactor, debug — all benefit from deep thinking.
+11. **Fix the existing approach before switching.** It worked before; find what broke instead of starting over.
+12. **Research before evaluating.** Investigate implementation details and prior art before praising or rejecting an idea.
+
+## Mandatory procedure for code changes
+
+For any non-trivial code modification, work through these steps in order. The
+hooks installed by ccb pre-load steps 1–3 into your context at session start —
+you don't need to re-read those files manually.
+
+1. **Read `PROJECT.llm`** to understand the architecture and tech stack.
+2. **Locate the target module** that owns the change.
+3. **Read that module's `CONTEXT.llm`** to understand its interface and invariants.
+4. **Plan with ultrathink.** Consider impact on dependents, tests, and contracts.
+5. **Analyze with ultrathink.** Trace the actual code flow involved.
+6. **Make the smallest possible change.** Preserve unaffected behavior.
+7. **Verify with ultrathink.** Run the relevant tests; reason about edge cases.
+8. **Update contexts.** The `SessionEnd` hook captures most of this automatically;
+   manual `/ccb-update` is only needed when interfaces change mid-session.
+
+## Diagnosis protocol
+
+Before any fix, spend up to 5 minutes gathering evidence. Most "broken" systems
+fail one of these cheap checks:
+
+| Command | Detects |
+|---|---|
+| `ls -la <file>` | Wrong permissions (`chmod +x` fixes ~50% of "won't run") |
+| `echo $VAR` | Missing or empty environment variables |
+| `which python3` | Wrong interpreter (system vs venv) |
+| `ps aux \| grep <service>` | Service crashed or never started |
+| `lsof -i :<port>` | Port held by another process |
+| `pip3 list \| grep <pkg>` | Dependency not installed |
+| `git diff HEAD~1` | Recent change introducing the regression |
+
+Form a hypothesis from the evidence, then try the cheapest fix first
+(chmod, export, restart). Code changes come last, after simple fixes fail.
+
+## Context file format
+
+ccb maintains two kinds of structured context files. They are machine-readable
+and intended for LLMs, not humans.
+
+### `PROJECT.llm` (project root, exactly one)
+
+```
+@project: <name>
+@version: <semver>
+@updated: <ISO-8601 timestamp>
+@language: python | typescript | go | ...
+@package_manager: poetry | npm | pnpm | go | ...
+@architecture:
+  <path>/: <one-line description>
+@dependency_graph:
+  <module>: [<module>, ...]
+@modules_status:
+  <module>: complete | in_progress | broken
+@recent_changes:
+  - <ISO timestamp> <path>: <what changed>
+```
+
+### `<module>/CONTEXT.llm` (one per non-trivial directory)
+
+```
+@directory: <relative path>
+@updated: <ISO-8601 timestamp>
+@status: complete | in_progress | broken
+@purpose: <one-line description of what lives here>
+@exports:
+  <name>: <signature or short description>
+@imports:
+  <module>: [<symbol>, ...]
+@invariants:
+  - <constraint that must always hold>
+@known_issues:
+  - <file:line>: <description>
+@todos:
+  - <description>
+```
+
+### Forbidden zones
+
+Never write `CONTEXT.llm` into: `.venv/`, `venv/`, `__pycache__/`, `.git/`,
+`node_modules/`, `dist/`, `build/`, `.eggs/`, `.local/`, `.ccb/`.
+Use venvs for package install — but the venv directory itself never holds context.
+
+## Testing and production hygiene
+
+### Tests
+
+- Write a test, **run it immediately**, fix until it passes — then move on.
+- Never report "done" with failing tests. All pass, not most.
+- A test that was never run does not exist.
+
+### Production code
+
+- **No mocks.** `return [{"id": 1, "name": "Test"}]` is wrong; query the real source.
+- **No hardcoded secrets.** `API_KEY = "test-123"` is wrong; use `os.getenv("API_KEY")`.
+- **No fixture data.** `users = ["demo@test.com"]` is wrong; fetch from the database.
+
+### Honesty
+
+If a blocker exists, name it and ask. Do not silently bypass:
+
+- Wrong: "X was broken so I disabled it"
+- Right: "X is broken. Fix X first, or do you authorize bypassing it?"
+
+If you removed something, say so. If a test fails, say so. False success reports
+cost more than a delayed honest one.
+
+## Environment detection
+
+Detect the project's package manager from lockfiles and use the matching tool.
+Never mix managers in the same project.
+
+| Lockfile present | Use | Never use |
+|---|---|---|
+| `poetry.lock` | `poetry add`, `poetry install` | `pip install` |
+| `Pipfile.lock` | `pipenv install` | `pip install`, `poetry add` |
+| `uv.lock` | `uv add`, `uv sync` | `pip install` |
+| `requirements.txt` only | `pip3 install -r requirements.txt` | `poetry add` |
+| `pnpm-lock.yaml` | `pnpm install`, `pnpm add` | `npm install`, `yarn add` |
+| `yarn.lock` | `yarn add` | `npm install`, `pnpm add` |
+| `package-lock.json` | `npm install`, `npm i <pkg>` | `pnpm`, `yarn` |
+| `go.mod` | `go get`, `go mod tidy` | `dep`, `glide` |
+| `Cargo.toml` | `cargo add` | manually editing `Cargo.toml` |
+
+Always use `python3` (never `python`), `pip3` (never `pip`). Inside an
+activated venv, `pip` and `python` resolve correctly — but be explicit so the
+intent is clear in transcripts and scripts.
+
+## Pre-response validation
+
+Before sending a response that claims work is complete, verify each item:
+
+- [ ] Modified source files, not running processes
+- [ ] Changes will survive a restart
+- [ ] All requested tasks completed (not a subset)
+- [ ] All tests pass (not most)
+- [ ] No mocks or hardcoded test data in production paths
+- [ ] PROJECT.llm and relevant CONTEXT.llm updated
+- [ ] Used ultrathink for genuinely complex sections
+- [ ] Honest about state — no "should work", no silent skips
+
+If any item fails, fix it before responding rather than acknowledging it after.
+
+<!-- ccb:end -->
