@@ -1,50 +1,27 @@
-# Development files
-.claude/
-*.llm
-CLAUDE.md
-PROJECT.llm
-CONTEXT.llm
-CLAUDE_backup_*
-.claude-hooks.toml
-
-# Test files
-test_baseline_*.py
-
-# Install scripts (keep install.py for public access)
-install-claude-context.py
-
-# Documentation drafts
-README_v2.md
-
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+*.py[cod]
 *.egg-info/
-.installed.cfg
-*.egg
+build/
+dist/
+.eggs/
 
 # Virtual environments
+.venv/
 venv/
 env/
-ENV/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+
+# Local
+.local/
+.DS_Store
