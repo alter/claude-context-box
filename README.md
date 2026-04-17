@@ -10,6 +10,70 @@ architecture without re-scanning it on every session.
 > native Claude Code primitives — Skills, Hooks, and additive CLAUDE.md merging.
 > Old releases are not compatible with this branch.
 
+## Quick start
+
+Step 1 — install. From inside your target project (the one ccb should manage):
+
+```bash
+cd /path/to/your/project
+curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
+```
+
+That single command does everything: clones ccb to a tempdir, builds an
+isolated venv at `.claude/ccb-venv/`, installs ccb into it, copies skills /
+hooks / engine / git assets into `.claude/`, merges the ccb section into
+`CLAUDE.md` (preserving your existing rules), drops a shim at
+`.claude/bin/ccb`, and runs the initial engine update so `PROJECT.llm` and
+per-module `CONTEXT.llm` files are populated immediately.
+
+Step 2 — verify:
+
+```bash
+.claude/bin/ccb status
+```
+
+You should see `ccb section in CLAUDE.md: True`, `5 ccb hook(s) registered`,
+`5 skill(s)` installed, and `CONTEXT.llm coverage: N/N dirs (100%)`.
+
+Step 3 — open Claude Code in this project. The `SessionStart` hook fires
+automatically and injects `PROJECT.llm` + the latest daily log into Claude's
+context. There is **nothing else to type at session start** — every subsequent
+session inherits state from the previous one via auto-captured daily logs.
+
+### Optional follow-ups
+
+Use `ccb` without typing the path each time:
+
+```bash
+echo 'export PATH="$PWD/.claude/bin:$PATH"' >> ~/.zshrc   # or ~/.bashrc
+exec $SHELL                                                # reload shell
+ccb status                                                 # now works bare
+```
+
+Refresh `PROJECT.llm` + every `CONTEXT.llm` on demand
+(normally automatic via the `SessionEnd` hook):
+
+```bash
+.claude/bin/ccb update         # or just `ccb update` if PATH is set
+```
+
+Or, from inside Claude Code, type `/ccb-update` (a native skill).
+
+Refresh contexts automatically on every `git commit`
+(only do this if you commit `PROJECT.llm` / `CONTEXT.llm` to git):
+
+```bash
+bash .claude/ccb-git/install.sh
+```
+
+To remove ccb later:
+
+```bash
+.claude/bin/ccb uninstall                # strips ccb block from CLAUDE.md
+rm -rf .claude/ccb-venv .claude/bin      # then drop the venv + shim
+bash .claude/ccb-git/uninstall.sh        # if you installed the pre-commit hook
+```
+
 ## What it does
 
 - **Reads context for you on session start.** A `SessionStart` hook injects
@@ -30,24 +94,26 @@ architecture without re-scanning it on every session.
   `/ccb-cleancode`, `/ccb-deps` are real Claude Code slash commands with
   proper `SKILL.md` frontmatter — no XML parsing, no description-prompting.
 
-## Install
+## Install — under the hood
 
-```bash
-curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
-```
-
-The installer:
+The Quick start command above runs `install.py`, which in order:
 
 1. Refuses to run inside the ccb source repo itself (guard against accidents).
 2. Detects your project's language and package manager (poetry / pip / uv /
    pnpm / npm / cargo / go).
-3. Copies skills, hooks, and the engine into `.claude/`.
-4. Merges `ccb` keys into `.claude/settings.json` (registers the hooks),
-   preserving any user-defined hooks.
-5. Inserts the ccb-managed block into `CLAUDE.md` between markers (creates the
-   file if absent). Pre-existing user content is left untouched.
-6. Runs an initial `update.py` so `PROJECT.llm` and `CONTEXT.llm` files are
-   immediately populated.
+3. Clones the ccb source into a tempdir.
+4. Creates an isolated venv at `.claude/ccb-venv/` and `pip install`s ccb into
+   it (no global / user-site pollution).
+5. Copies skills, hooks, engine, and git assets into `.claude/`.
+6. Merges `ccb` keys into `.claude/settings.json` (registers the hooks),
+   preserving any user-defined hooks. Hook commands point at the venv
+   python via `${CLAUDE_PROJECT_DIR}` so the project remains relocatable.
+7. Inserts the ccb-managed block into `CLAUDE.md` between markers (creates
+   the file if absent). Pre-existing user content is left untouched.
+8. Runs the engine update so `PROJECT.llm` + every `CONTEXT.llm` are
+   populated immediately.
+9. Drops a shim at `.claude/bin/ccb` so the user can run `ccb` without
+   activating the venv.
 
 Environment variables for non-default installs:
 
@@ -55,7 +121,7 @@ Environment variables for non-default installs:
 |---|---|---|
 | `CCB_DIR` | `$PWD` | Target project directory |
 | `CCB_REF` | `main` | Git branch / tag / commit to install |
-| `CCB_FORCE` | `0` | Overwrite `.claude/{skills,hooks,ccb-engine}` instead of merging |
+| `CCB_FORCE` | `0` | Recreate `.claude/ccb-venv/` from scratch |
 | `CCB_REPO_URL` | `https://github.com/alter/claude-context-box.git` | Alternate source (used by tests, mirrors, forks) |
 
 ## How automatic context maintenance works
