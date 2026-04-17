@@ -33,6 +33,22 @@ _BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+# .gitignore uses hash comments for markers (HTML comments would be literal lines).
+GITIGNORE_BEGIN = "# ccb:begin"
+GITIGNORE_END = "# ccb:end"
+_GITIGNORE_BLOCK_RE = re.compile(
+    re.escape(GITIGNORE_BEGIN) + r".*?" + re.escape(GITIGNORE_END),
+    re.DOTALL,
+)
+
+# Paths ccb writes to the target that should never be committed.
+GITIGNORE_PATTERNS: tuple[str, ...] = (
+    ".claude/ccb-venv/",
+    ".ccb/",
+    "PROJECT.llm",
+    "**/CONTEXT.llm",
+)
+
 
 def render_claude_md_block(section_body: str, version: str) -> str:
     """Wrap an asset body in begin/end markers with a version stamp."""
@@ -73,6 +89,59 @@ def strip_claude_md(target_path: Path) -> bool:
     if not _BLOCK_RE.search(existing):
         return False
     new = _BLOCK_RE.sub("", existing, count=1).rstrip() + "\n"
+    target_path.write_text(new, encoding="utf-8")
+    return True
+
+
+def render_gitignore_block(version: str) -> str:
+    """Wrap ccb gitignore patterns in begin/end markers with a version stamp."""
+    body = "\n".join(GITIGNORE_PATTERNS)
+    return (
+        f"{GITIGNORE_BEGIN}\n"
+        f"# ccb runtime artifacts (managed by claude-context-box {version}; "
+        f"do not edit between markers)\n"
+        f"{body}\n"
+        f"{GITIGNORE_END}"
+    )
+
+
+def merge_gitignore(target_path: Path, ccb_block: str) -> str:
+    """Insert or replace the ccb block in target .gitignore.
+
+    Returns one of: "created", "replaced", "appended", "patterns-already-listed".
+    The last status indicates the project author already explicitly listed
+    every ccb path outside of any ccb markers — we leave them alone instead
+    of forcing a duplicate block.
+    """
+    if not target_path.exists():
+        target_path.write_text(ccb_block + "\n", encoding="utf-8")
+        return "created"
+
+    existing = target_path.read_text(encoding="utf-8")
+    if _GITIGNORE_BLOCK_RE.search(existing):
+        new = _GITIGNORE_BLOCK_RE.sub(lambda _m: ccb_block, existing, count=1)
+        target_path.write_text(new, encoding="utf-8")
+        return "replaced"
+
+    # Heuristic: if every pattern ccb owns already appears in .gitignore as a
+    # standalone line, the user has manually listed them — don't append.
+    existing_lines = {line.strip() for line in existing.splitlines()}
+    if all(p in existing_lines for p in GITIGNORE_PATTERNS):
+        return "patterns-already-listed"
+
+    sep = "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+    target_path.write_text(existing + sep + ccb_block + "\n", encoding="utf-8")
+    return "appended"
+
+
+def strip_gitignore(target_path: Path) -> bool:
+    """Remove the ccb block from target .gitignore. Returns True if removed."""
+    if not target_path.exists():
+        return False
+    existing = target_path.read_text(encoding="utf-8")
+    if not _GITIGNORE_BLOCK_RE.search(existing):
+        return False
+    new = _GITIGNORE_BLOCK_RE.sub("", existing, count=1).rstrip() + "\n"
     target_path.write_text(new, encoding="utf-8")
     return True
 

@@ -140,6 +140,31 @@ def test_status_reports_after_update(tmp_path: Path) -> None:
     proc = _run("status.py", tmp_path)
     assert "PROJECT.llm" in proc.stdout
     assert "present" in proc.stdout
+    assert ".ccb/errors.log" in proc.stdout
+    assert "no errors recorded" in proc.stdout
+
+
+def test_status_surfaces_hook_errors(tmp_path: Path) -> None:
+    """When a hook has crashed and written to .ccb/errors.log, status must
+    report the count and timestamp so the user notices silent failures."""
+    _make_project(tmp_path)
+    _run("update.py", tmp_path)
+    errors = tmp_path / ".ccb" / "errors.log"
+    errors.parent.mkdir(parents=True, exist_ok=True)
+    errors.write_text(
+        "\n--- 2026-04-17T15:23:11Z session_start ---\n"
+        "Traceback (most recent call last):\n"
+        '  File "session_start.py", line 42, in run\n'
+        "RuntimeError: simulated\n"
+        "\n--- 2026-04-17T16:01:02Z post_tool_use ---\n"
+        "Traceback (most recent call last):\n"
+        "ValueError: another simulated failure\n"
+    )
+    proc = _run("status.py", tmp_path)
+    assert proc.returncode == 0
+    assert "2 hook error(s)" in proc.stdout
+    assert "2026-04-17T16:01:02Z" in proc.stdout
+    assert "post_tool_use" in proc.stdout
 
 
 # validate.py ------------------------------------------------------------

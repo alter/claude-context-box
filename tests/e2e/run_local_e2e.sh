@@ -98,6 +98,12 @@ grep -q "USER RULE: do not delete src/db/models.py" "$TARGET/CLAUDE.md" \
     || fail "user content was clobbered"
 ok "existing user CLAUDE.md content preserved"
 
+[ -f "$TARGET/.gitignore" ] || fail ".gitignore not created"
+grep -q "ccb:begin" "$TARGET/.gitignore" || fail ".gitignore missing ccb markers"
+grep -q ".claude/ccb-venv/" "$TARGET/.gitignore" || fail ".gitignore missing ccb-venv pattern"
+grep -q "PROJECT.llm" "$TARGET/.gitignore" || fail ".gitignore missing PROJECT.llm pattern"
+ok ".gitignore created with ccb runtime patterns"
+
 # ---- 5. Reinstall idempotency ----------------------------------------------
 echo "==> reinstall (idempotency)"
 CCB_DIR="$TARGET" \
@@ -229,6 +235,10 @@ ok "ccb block removed by uninstall"
 grep -q "USER RULE: do not delete" "$TARGET/CLAUDE.md" \
     || fail "user content lost on uninstall"
 ok "user content survived uninstall"
+
+grep -q "ccb:begin" "$TARGET/.gitignore" \
+    && fail "ccb block still present in .gitignore after uninstall"
+ok "ccb block removed from .gitignore by uninstall"
 
 echo
 echo "==> ALL E2E ASSERTIONS PASSED"

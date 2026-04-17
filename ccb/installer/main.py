@@ -13,9 +13,12 @@ from ccb.installer.detector import detect
 from ccb.installer.guard import assert_not_source, is_ccb_source_repo
 from ccb.installer.merger import (
     merge_claude_md,
+    merge_gitignore,
     merge_settings_json,
     render_claude_md_block,
+    render_gitignore_block,
     strip_claude_md,
+    strip_gitignore,
 )
 
 ASSETS_ROOT = Path(ccb.__file__).resolve().parent / "assets"
@@ -69,6 +72,11 @@ def install(target_dir: str = ".", force: bool = False) -> int:
         block = render_claude_md_block(section_body, ccb.__version__)
         outcome = merge_claude_md(target / "CLAUDE.md", block)
         print(f"CLAUDE.md: {outcome}")
+
+    gi_outcome = merge_gitignore(
+        target / ".gitignore", render_gitignore_block(ccb.__version__)
+    )
+    print(f".gitignore: {gi_outcome}")
 
     # Initial population of PROJECT.llm + CONTEXT.llm so the project has
     # something to inject the moment a Claude Code session opens.
@@ -227,6 +235,8 @@ def uninstall(target_dir: str = ".") -> int:
     assert_not_source(target)
     removed = strip_claude_md(target / "CLAUDE.md")
     print(f"CLAUDE.md ccb block: {'removed' if removed else 'not present'}")
+    gi_removed = strip_gitignore(target / ".gitignore")
+    print(f".gitignore ccb block: {'removed' if gi_removed else 'not present'}")
     print("note: .claude/ contents (skills, hooks, engine) left in place — remove manually if desired")
     return 0
 

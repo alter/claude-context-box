@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -22,6 +23,7 @@ def main() -> int:
     _line(".claude/skills/", _check_skills(root))
     _line(".ccb/daily_log/", _check_daily_log(root))
     _line(".ccb/state.json", _check_state(root))
+    _line(".ccb/errors.log", _check_errors(root))
     _line("CONTEXT.llm coverage", _check_context_coverage(root))
     return 0
 
@@ -90,6 +92,21 @@ def _check_daily_log(root: Path) -> str:
     if not logs:
         return "empty"
     return f"{len(logs)} entries, latest: {logs[-1].name}"
+
+
+def _check_errors(root: Path) -> str:
+    p = root / ".ccb" / "errors.log"
+    if not p.exists():
+        return "no errors recorded"
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "present but unreadable"
+    headers = re.findall(r"^---\s+(\S+)\s+(\S+)\s+---$", text, flags=re.MULTILINE)
+    if not headers:
+        return f"present ({p.stat().st_size} bytes, no parseable entries)"
+    last_ts, last_label = headers[-1]
+    return f"{len(headers)} hook error(s); latest: {last_ts} ({last_label})"
 
 
 def _check_state(root: Path) -> str:

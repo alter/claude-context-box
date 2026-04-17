@@ -70,6 +70,8 @@ curl -sSL "https://raw.githubusercontent.com/${CCB_GH_REPO}/${CCB_REF}/install.p
 [ -d /work/target/.claude/ccb-engine ]                 || fail "ccb-engine missing"
 [ -d /work/target/.claude/ccb-git ]                    || fail "ccb-git missing"
 [ -f /work/target/.claude/settings.json ]              || fail "settings.json missing"
+[ -f /work/target/.gitignore ]                         || fail ".gitignore missing"
+grep -q ".claude/ccb-venv/" /work/target/.gitignore    || fail ".gitignore missing ccb-venv pattern"
 ok "all expected paths created"
 
 grep -q "ccb:begin" /work/target/CLAUDE.md             || fail "ccb begin marker missing"
