@@ -23,7 +23,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "ruff"]
+dev = ["pytest>=7", "pytest-cov>=4", "ruff"]
 # LLM-summarized session captures (Phase F). Install via:
 #   .claude/ccb-venv/bin/pip install 'claude-context-box[llm]'
 # Then `export ANTHROPIC_API_KEY=...` and the SessionEnd hook will start
@@ -54,3 +54,26 @@ ccb = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.coverage.run]
+source = ["ccb"]
+# Engine, hooks, and skill .md files are exercised through subprocess +
+# end-to-end tests, not in-process imports — line coverage of the asset
+# directory would always read 0% even though we test it heavily.
+omit = [
+    "ccb/assets/engine/*",
+    "ccb/assets/hooks/*",
+    "ccb/assets/skills/*",
+    "ccb/assets/git/*",
+    "ccb/assets/settings/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

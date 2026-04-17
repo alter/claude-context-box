@@ -105,7 +105,12 @@ def _fetch(ref: str, tmp_dir: Path, repo_url: str, tarball_base: str) -> Path:
     with urllib.request.urlopen(url) as resp:
         data = resp.read()
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
-        tar.extractall(tmp_dir)
+        # Python 3.12+ supports `filter` to defend against tar slip; on older
+        # versions the kwarg is silently ignored.
+        try:
+            tar.extractall(tmp_dir, filter="data")
+        except TypeError:
+            tar.extractall(tmp_dir)
     extracted = next(p for p in tmp_dir.iterdir() if p.is_dir())
     return extracted
 

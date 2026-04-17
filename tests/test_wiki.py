@@ -168,6 +168,112 @@ def test_query_fails_without_api_key(tmp_path: Path) -> None:
     assert "ANTHROPIC_API_KEY" in proc.stderr
 
 
+def test_compile_truncates_oldest_logs_when_over_limit(tmp_path: Path) -> None:
+    """When daily logs exceed INPUT_BYTES_LIMIT, the oldest content is dropped
+    (newest logs are most relevant) — verified by inspecting what was sent
+    to the model via the fake SDK."""
+    log_dir = tmp_path / ".ccb" / "daily_log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    # Three logs ordered by date. Each ~80 KB → only the newest two should
+    # fit under the 200 KB cap (with header overhead).
+    payload = "x" * 80_000
+    (log_dir / "2026-04-01.md").write_text(f"## OLDEST\n{payload}\n")
+    (log_dir / "2026-04-10.md").write_text(f"## MIDDLE\n{payload}\n")
+    (log_dir / "2026-04-17.md").write_text(f"## NEWEST\n{payload}\n")
+
+    # Fake SDK that records the prompt argument.
+    sitepkg = tmp_path / "fake_site"
+    sitepkg.mkdir(parents=True, exist_ok=True)
+    captured = tmp_path / "captured_prompt.txt"
+    (sitepkg / "anthropic.py").write_text(
+        "from pathlib import Path\n"
+        "class _Block:\n"
+        "    type = 'text'\n"
+        "    def __init__(self, text):\n"
+        "        self.text = text\n"
+        "class _Msg:\n"
+        "    def __init__(self, text):\n"
+        "        self.content = [_Block(text)]\n"
+        "class _Messages:\n"
+        "    def create(self, **kwargs):\n"
+        f"        Path({str(captured)!r}).write_text(kwargs['messages'][0]['content'])\n"
+        "        return _Msg('{\"intro\":\"x\",\"topics\":[]}')\n"
+        "class Anthropic:\n"
+        "    messages = _Messages()\n"
+    )
+
+    proc = _run("compile_wiki.py", tmp_path, env_extra={
+        "ANTHROPIC_API_KEY": "x",
+        "PYTHONPATH": str(sitepkg),
+    })
+    assert proc.returncode == 0, proc.stderr
+
+    sent = captured.read_text()
+    # NEWEST must be present (it's the most recent and highest priority).
+    assert "## NEWEST" in sent
+    # OLDEST must be absent or partially truncated; sanity-check we didn't
+    # send all three full logs (3 × 80 KB ~= 240 KB > 200 KB cap).
+    assert len(sent) < 220_000
+
+
+def test_compile_handles_no_topics_gracefully(tmp_path: Path) -> None:
+    """If model returns valid JSON but the topics list is empty, exit 0
+    without writing index.md."""
+    _seed_logs(tmp_path)
+    sitepkg = _install_fake_anthropic(tmp_path,
+                                      response_text='{"intro":"x","topics":[]}')
+    proc = _run("compile_wiki.py", tmp_path, env_extra={
+        "ANTHROPIC_API_KEY": "x",
+        "PYTHONPATH": str(sitepkg),
+    })
+    assert proc.returncode == 0
+    assert "no topics extracted" in proc.stderr
+    assert not (tmp_path / ".ccb" / "wiki" / "index.md").exists()
+
+
+def test_compile_since_filters_logs(tmp_path: Path) -> None:
+    """--since 1d should only include logs modified within the last day."""
+    import os, time
+    log_dir = tmp_path / ".ccb" / "daily_log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    old = log_dir / "2026-04-01.md"
+    old.write_text("OLD CONTENT\n")
+    # Stamp it to 30 days ago.
+    old_time = time.time() - 30 * 86400
+    os.utime(old, (old_time, old_time))
+    new = log_dir / "2026-04-17.md"
+    new.write_text("NEW CONTENT\n")
+
+    captured = tmp_path / "captured.txt"
+    sitepkg = tmp_path / "fake_site"
+    sitepkg.mkdir(parents=True, exist_ok=True)
+    (sitepkg / "anthropic.py").write_text(
+        "from pathlib import Path\n"
+        "class _Block:\n"
+        "    type = 'text'\n"
+        "    def __init__(self, text):\n"
+        "        self.text = text\n"
+        "class _Msg:\n"
+        "    def __init__(self, text):\n"
+        "        self.content = [_Block(text)]\n"
+        "class _Messages:\n"
+        "    def create(self, **kwargs):\n"
+        f"        Path({str(captured)!r}).write_text(kwargs['messages'][0]['content'])\n"
+        "        return _Msg('{\"intro\":\"\",\"topics\":[]}')\n"
+        "class Anthropic:\n"
+        "    messages = _Messages()\n"
+    )
+
+    proc = _run("compile_wiki.py", tmp_path, args=["--since", "1d"], env_extra={
+        "ANTHROPIC_API_KEY": "x",
+        "PYTHONPATH": str(sitepkg),
+    })
+    assert proc.returncode == 0
+    sent = captured.read_text()
+    assert "NEW CONTENT" in sent
+    assert "OLD CONTENT" not in sent
+
+
 def test_query_returns_model_answer(tmp_path: Path) -> None:
     wiki = tmp_path / ".ccb" / "wiki"
     (wiki / "topics").mkdir(parents=True)

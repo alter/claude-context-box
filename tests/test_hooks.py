@@ -158,6 +158,84 @@ def test_session_start_auto_refresh_when_project_llm_missing(tmp_path: Path) -> 
     assert "PROJECT.llm" in ctx
 
 
+def test_session_start_survives_failing_engine_update(tmp_path: Path) -> None:
+    """If the synchronous auto-refresh crashes, SessionStart still inject
+    whatever PROJECT.llm exists — it must never break the user's session."""
+    # Engine script that exits 1 — simulates a buggy update.py
+    eng = tmp_path / ".claude" / "ccb-engine"
+    eng.mkdir(parents=True)
+    (eng / "update.py").write_text(
+        "import sys\nsys.stderr.write('simulated crash\\n')\nsys.exit(1)\n"
+    )
+    # PROJECT.llm exists from a previous good run.
+    (tmp_path / "PROJECT.llm").write_text("@project: x\n@stale: yes\n")
+    # And a source file newer than PROJECT.llm so _is_stale triggers update.
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("def hi(): pass\n")
+    import os, time
+    time.sleep(0.05)
+    os.utime(tmp_path / "src" / "main.py", None)
+
+    out = _run_hook("session_start.py", {}, tmp_path)
+    # Hook still injects PROJECT.llm even though update.py failed.
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "@project: x" in ctx
+
+
+def test_session_start_respects_disable_auto_update_env(tmp_path: Path) -> None:
+    """CCB_DISABLE_AUTO_UPDATE=1 should skip the synchronous refresh entirely."""
+    eng = tmp_path / ".claude" / "ccb-engine"
+    eng.mkdir(parents=True)
+    marker = tmp_path / "engine_was_called.txt"
+    (eng / "update.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('called')\n"
+    )
+    (tmp_path / "PROJECT.llm").write_text("@project: y\n")
+    # Make a stale source file so the staleness check would fire if not disabled.
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("def x(): pass\n")
+    import os, time
+    time.sleep(0.05)
+    os.utime(tmp_path / "src" / "main.py", None)
+
+    proc = subprocess.run(
+        [sys.executable, str(HOOKS_DIR / "session_start.py")],
+        input="{}",
+        text=True,
+        capture_output=True,
+        env={
+            "CLAUDE_PROJECT_DIR": str(tmp_path),
+            "CCB_DISABLE_AUTO_UPDATE": "1",
+            "PATH": "",
+        },
+        timeout=5,
+    )
+    assert proc.returncode == 0
+    assert not marker.exists(), "engine update should have been skipped"
+
+
+def test_pre_compact_writes_summary_to_daily_log(tmp_path: Path) -> None:
+    """PreCompact should snapshot session state into the daily log so early-
+    session decisions don't evaporate during context compaction."""
+    state = tmp_path / ".ccb" / "state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"changed_files": ["src/auth.py", "src/db.py"]}))
+
+    out = _run_hook(
+        "pre_compact.py",
+        {"transcript_path": "/tmp/x", "last_assistant_message": "halfway through refactor"},
+        tmp_path,
+    )
+
+    assert out == {}
+    logs = list((tmp_path / ".ccb" / "daily_log").glob("*.md"))
+    assert len(logs) == 1
+    body = logs[0].read_text()
+    assert "src/auth.py" in body
+    assert "src/db.py" in body
+    assert "halfway through refactor" in body
+
+
 def test_session_end_writes_handoff_and_spawns_worker(tmp_path: Path) -> None:
     """SessionEnd records changed files via a handoff JSON for the background worker."""
     state = tmp_path / ".ccb" / "state.json"

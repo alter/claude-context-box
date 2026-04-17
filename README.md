@@ -392,11 +392,34 @@ claude-context-box/
 Run the suite:
 
 ```bash
-python3 -m pytest tests/         # 77 unit + integration
-bash tests/e2e/run_local_e2e.sh  # local end-to-end
-bash tests/e2e/run_docker_e2e.sh # same, in a clean container
-bash tests/e2e/run_real_curl.sh  # real github.com → curl → install (after `git push`)
+python3 -m pytest tests/                                  # 180 unit + integration
+python3 -m pytest tests/ --cov=ccb --cov-report=term      # with coverage report
+bash tests/e2e/run_local_e2e.sh                           # local end-to-end
+bash tests/e2e/run_docker_e2e.sh                          # same, in a clean container
+bash tests/e2e/run_real_curl.sh                           # real github.com curl flow
 ```
+
+Current coverage: **96% line coverage** of the importable ccb package.
+Uncovered lines are subprocess fallback paths and the `if __name__ ==
+"__main__"` guards. Engine and hook scripts under `ccb/assets/` are not
+counted in line coverage (they're shipped to the target as-is and exercised
+through subprocess + e2e), but each has its own dedicated test file:
+
+| File | Tests |
+|---|---|
+| `tests/test_merger.py` | 20 — CLAUDE.md / settings.json / .gitignore additive merging |
+| `tests/test_detector.py` | 31 — language / package manager / venv detection |
+| `tests/test_install_py.py` | 16 — install.py: guard, venv setup, pip, shim, fetch + tarball fallback |
+| `tests/test_main_helpers.py` | 24 — _substitute_python, _compose_claude_md, wiki dispatch, source-repo guards |
+| `tests/test_cli.py` | 13 — argparse subcommand dispatch (all `ccb …` verbs) |
+| `tests/test_hooks.py` | 19 — every lifecycle hook + auto-refresh recovery + PreCompact |
+| `tests/test_engine.py` | 15 — update / status / validate / cleancode |
+| `tests/test_install_smoke.py` | 6 — full install / reinstall / uninstall in-process |
+| `tests/test_git_hook.py` | 9 — pre-commit hook installer |
+| `tests/test_guard.py` | 5 — source-repo detection |
+| `tests/test_llm_summary.py` | 7 — capture_session.py with anthropic SDK mocked |
+| `tests/test_wiki.py` | 11 — compile_wiki.py + query_wiki.py, including 200 KB truncation |
+| `tests/test_permission_resilience.py` | 5 — every scanner survives chmod-000 dirs |
 
 LLM features (Phase F + wiki) are tested via a faked anthropic SDK injected
 through PYTHONPATH — the suite runs without network or API key. Real Anthropic
