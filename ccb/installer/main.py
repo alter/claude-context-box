@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -69,7 +70,42 @@ def install(target_dir: str = ".", force: bool = False) -> int:
         outcome = merge_claude_md(target / "CLAUDE.md", block)
         print(f"CLAUDE.md: {outcome}")
 
+    # Initial population of PROJECT.llm + CONTEXT.llm so the project has
+    # something to inject the moment a Claude Code session opens.
+    _run_engine_update(target)
+
     print(f"\nccb {ccb.__version__} installed in {target}")
+    return 0
+
+
+def _run_engine_update(target: Path) -> int:
+    """Invoke .claude/ccb-engine/update.py against the target.
+
+    Uses the venv python if it exists, else falls back to whatever python
+    invoked ccb. Failures are reported but non-fatal (install itself succeeded).
+    """
+    update_script = target / ".claude" / "ccb-engine" / "update.py"
+    if not update_script.exists():
+        return 0
+
+    venv_python = target / ".claude" / "ccb-venv" / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
+    python_cmd = str(venv_python) if venv_python.exists() else sys.executable
+
+    proc = subprocess.run(
+        [python_cmd, str(update_script)],
+        cwd=str(target),
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(target)},
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        sys.stderr.write(
+            f"ccb engine update failed (non-fatal):\n{proc.stderr}\n"
+        )
+        return proc.returncode
     return 0
 
 
@@ -125,8 +161,19 @@ def status() -> int:
 
 
 def update() -> int:
-    """Re-run install in the current directory (idempotent reinstall)."""
-    return install(target_dir=".", force=False)
+    """Regenerate PROJECT.llm and per-module CONTEXT.llm in the current dir.
+
+    Equivalent to invoking the /ccb-update skill from inside Claude Code.
+    For an idempotent reinstall of assets, run `ccb install` instead.
+    """
+    target = Path.cwd().resolve()
+    if is_ccb_source_repo(target):
+        print(f"this is the ccb source repo, not a target install: {target}")
+        return 0
+    rc = _run_engine_update(target)
+    if rc == 0:
+        print("ccb update: done")
+    return rc
 
 
 def uninstall(target_dir: str = ".") -> int:
