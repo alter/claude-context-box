@@ -5,10 +5,10 @@ One curl command installs hooks and skills that keep `PROJECT.llm` and per-modul
 `CONTEXT.llm` files in sync with your code, so Claude always knows the project
 architecture without re-scanning it on every session.
 
-> **Status: 0.3.0 in active development.** The previous shortcut-based release
-> (`u` / `update` / `c` / `s` parsed out of CLAUDE.md) has been replaced with
-> native Claude Code primitives — Skills, Hooks, and additive CLAUDE.md merging.
-> Old releases are not compatible with this branch.
+> **Status: 0.3.0 released.** The previous shortcut-based line (`u` / `update`
+> / `c` / `s` parsed out of CLAUDE.md) has been replaced with native Claude
+> Code primitives — Skills, Hooks, and additive CLAUDE.md merging. Old
+> releases are not compatible with this branch.
 
 ---
 

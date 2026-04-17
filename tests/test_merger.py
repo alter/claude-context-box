@@ -111,8 +111,8 @@ def test_strip_claude_md_noop_when_no_block(tmp_path: Path) -> None:
 
 
 def test_render_block_carries_version(tmp_path: Path) -> None:
-    block = render_claude_md_block("body", "0.3.0-dev")
-    assert "0.3.0-dev" in block
+    block = render_claude_md_block("body", "0.3.0")
+    assert "0.3.0" in block
     assert block.startswith(CLAUDE_MD_BEGIN)
     assert block.endswith(CLAUDE_MD_END)
 
