@@ -25,3 +25,11 @@ env/
 # Local
 .local/
 .DS_Store
+
+# ccb runtime artifacts (when ccb itself runs against this repo)
+# These belong in target projects, not in the source tree.
+.claude/
+.ccb/
+CLAUDE.md
+PROJECT.llm
+**/CONTEXT.llm

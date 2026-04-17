@@ -101,7 +101,68 @@ grep -q "USER RULE: tests run with" "$TARGET/CLAUDE.md" \
     || fail "user content lost on reinstall"
 ok "user content preserved on reinstall"
 
-# ---- 6. Uninstall ----------------------------------------------------------
+# ---- 6. Engine: update.py generates context files --------------------------
+echo "==> engine: update"
+CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/ccb-engine/update.py" >/dev/null
+
+[ -f "$TARGET/PROJECT.llm" ] || fail "PROJECT.llm not generated"
+ok "PROJECT.llm generated"
+
+grep -q "@language: python" "$TARGET/PROJECT.llm" || fail "language not detected"
+ok "language correctly detected as python"
+
+[ -f "$TARGET/src/api/CONTEXT.llm" ] || fail "src/api/CONTEXT.llm not generated"
+[ -f "$TARGET/src/db/CONTEXT.llm" ]  || fail "src/db/CONTEXT.llm not generated"
+ok "per-module CONTEXT.llm files generated"
+
+grep -q "def hello" "$TARGET/src/api/CONTEXT.llm" \
+    || fail "exports not extracted from src/api/handler.py"
+ok "python AST exports extracted into CONTEXT.llm"
+
+# ---- 7. Engine: status reports the install correctly -----------------------
+echo "==> engine: status"
+status_out=$(CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/ccb-engine/status.py")
+echo "$status_out" | grep -q "ccb block: yes" || fail "status missed ccb block"
+echo "$status_out" | grep -q "5 ccb hook(s)" || fail "status missed registered hooks"
+echo "$status_out" | grep -q "5 skill(s)" || fail "status missed installed skills"
+ok "status reports install correctly"
+
+# ---- 8. Engine: validate is clean after update -----------------------------
+echo "==> engine: validate"
+CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/ccb-engine/validate.py" \
+    | grep -q "no issues" || fail "validate reported issues on a fresh project"
+ok "validate clean on freshly-updated project"
+
+# ---- 9. SessionStart hook injects PROJECT.llm into context -----------------
+echo "==> hook: session_start composes context"
+hook_out=$(echo '{}' | CLAUDE_PROJECT_DIR="$TARGET" \
+    python3 "$TARGET/.claude/hooks/session_start.py")
+echo "$hook_out" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read() or '{}')
+ctx = d.get('hookSpecificOutput', {}).get('additionalContext', '')
+assert 'PROJECT.llm' in ctx, 'session_start did not inject PROJECT.llm'
+assert '@language: python' in ctx, 'session_start did not include language line'
+" || fail "session_start hook output missing expected keys"
+ok "session_start hook injects PROJECT.llm into additionalContext"
+
+# ---- 10. PostToolUse hook tracks edits, SessionEnd drains them -------------
+echo "==> hooks: PostToolUse + SessionEnd"
+echo '{"tool_name": "Edit", "tool_input": {"file_path": "'"$TARGET"'/src/api/handler.py"}}' \
+    | CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/hooks/post_tool_use.py" >/dev/null
+grep -q "src/api/handler.py" "$TARGET/.ccb/state.json" \
+    || fail "post_tool_use did not record the edit"
+ok "post_tool_use records edits in .ccb/state.json"
+
+echo '{"transcript_path": "/tmp/fake.jsonl", "last_assistant_message": "shipped feature X"}' \
+    | CLAUDE_PROJECT_DIR="$TARGET" python3 "$TARGET/.claude/hooks/session_end.py" >/dev/null
+ls "$TARGET/.ccb/daily_log/"*.md >/dev/null 2>&1 \
+    || fail "session_end did not write a daily log"
+grep -q "shipped feature X" "$TARGET/.ccb/daily_log/"*.md \
+    || fail "session_end did not record last assistant message"
+ok "session_end drains state into daily log"
+
+# ---- 11. Uninstall ---------------------------------------------------------
 echo "==> uninstall"
 PYTHONPATH="$REPO_ROOT" python3 -m ccb uninstall --dir "$TARGET" >/dev/null
 grep -q "ccb:begin" "$TARGET/CLAUDE.md" \

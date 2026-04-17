@@ -3,5 +3,66 @@
     "version": "0.3.0-dev",
     "managed": true
   },
-  "hooks": {}
+  "hooks": {
+    "SessionStart": [
+      {
+        "_ccb": true,
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_start.py\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "_ccb": true,
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_end.py\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "_ccb": true,
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre_compact.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "_ccb": true,
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post_tool_use.py\""
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "_ccb": true,
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/instructions_loaded.py\""
+          }
+        ]
+      }
+    ]
+  }
 }
