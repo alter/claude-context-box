@@ -90,13 +90,15 @@ diagnose() {
     cat /work/target/.claude/settings.json >&2
     echo "------------------------" >&2
 }
-grep -q "ccb section in CLAUDE.md: True" /work/status.out \
-    || { diagnose; fail "shim ccb status reported wrong state"; }
+grep -q "ccb block: yes" /work/status.out \
+    || { diagnose; fail "shim ccb status reported missing ccb block"; }
 grep -qE "[0-9]+ ccb hook" /work/status.out \
     || { diagnose; fail "shim ccb status missed hooks count"; }
 grep -qE "[0-9]+ skill" /work/status.out \
     || { diagnose; fail "shim ccb status missed skills count"; }
-ok "shim ccb status works"
+grep -q "CONTEXT.llm coverage" /work/status.out \
+    || { diagnose; fail "shim ccb status missed coverage line"; }
+ok "shim ccb status works (full engine report)"
 
 # install.py advertises that PROJECT.llm + CONTEXT.llm are populated
 # immediately. Don't call update first — verify the initial install did it.
