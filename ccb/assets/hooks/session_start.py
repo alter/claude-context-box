@@ -93,20 +93,25 @@ def _refresh_if_stale(root: Path) -> None:
 
 
 def _is_stale(project_llm: Path, root: Path) -> bool:
-    """True if any tracked source file is newer than PROJECT.llm."""
-    cutoff = project_llm.stat().st_mtime
-    # Cheap heuristic: only check top-level dirs to keep the scan O(top-level).
+    """True if any tracked source file is newer than PROJECT.llm.
+
+    Uses os.walk with onerror so unreadable subtrees (data dirs owned by
+    root, fuse mounts that are down, etc.) are skipped, not raised.
+    """
+    import os
+    try:
+        cutoff = project_llm.stat().st_mtime
+    except OSError:
+        return True
     skip = {".git", ".venv", "venv", "env", "__pycache__", "node_modules",
             "dist", "build", ".eggs", ".local", ".ccb", ".claude"}
-    for d in root.iterdir():
-        if not d.is_dir() or d.name in skip or d.name.startswith("."):
-            continue
-        for p in d.rglob("*"):
-            if not p.is_file():
-                continue
-            if p.suffix in {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"}:
+    suffixes = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs")
+    for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
+        dirnames[:] = [d for d in dirnames if d not in skip and not d.startswith(".")]
+        for name in filenames:
+            if name.endswith(suffixes):
                 try:
-                    if p.stat().st_mtime > cutoff:
+                    if (Path(dirpath) / name).stat().st_mtime > cutoff:
                         return True
                 except OSError:
                     continue

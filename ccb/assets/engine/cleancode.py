@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import IGNORED_DIRS, parse_python_exports, project_root, relative  # noqa: E402
+from _lib import IGNORED_DIRS, parse_python_exports, project_root, relative, safe_rglob  # noqa: E402
 
 
 def main() -> int:
@@ -53,8 +53,11 @@ def main() -> int:
 
 
 def _iter_py(root: Path):
-    for p in root.rglob("*.py"):
-        if any(part in IGNORED_DIRS or part.startswith(".") for part in p.relative_to(root).parts[:-1]):
+    for p in safe_rglob(root, "*.py"):
+        try:
+            if any(part in IGNORED_DIRS or part.startswith(".") for part in p.relative_to(root).parts[:-1]):
+                continue
+        except ValueError:
             continue
         yield p
 

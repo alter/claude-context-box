@@ -77,9 +77,13 @@ def detect_package_manager(root: Path) -> str:
 
 
 def iter_code_dirs(root: Path) -> list[Path]:
-    """Yield directories that look like code modules (have at least one source file)."""
+    """Yield directories that look like code modules (have at least one source file).
+
+    Tolerates unreadable directories (data dirs owned by other users, broken
+    symlinks, fuse mounts that are down) — they're skipped, not raised.
+    """
     out: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
         # mutate dirnames in-place to prune the walk
         dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")]
         d = Path(dirpath)
@@ -88,6 +92,30 @@ def iter_code_dirs(root: Path) -> list[Path]:
         if any(_is_source_file(f) for f in filenames):
             out.append(d)
     return out
+
+
+def safe_iterdir(d: Path):
+    """Yield entries in `d`, skipping silently on PermissionError / OSError."""
+    try:
+        yield from d.iterdir()
+    except (PermissionError, OSError):
+        return
+
+
+def safe_rglob(root: Path, pattern: str = "*"):
+    """Like `root.rglob(pattern)` but never raises on unreadable subtrees."""
+    for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
+        d = Path(dirpath)
+        # match files
+        for name in filenames:
+            p = d / name
+            if p.match(pattern):
+                yield p
+        # match directories themselves
+        for name in dirnames:
+            p = d / name
+            if p.match(pattern):
+                yield p
 
 
 def _is_source_file(name: str) -> bool:

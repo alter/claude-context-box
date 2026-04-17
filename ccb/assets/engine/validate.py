@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import IGNORED_DIRS, project_root, relative  # noqa: E402
+from _lib import IGNORED_DIRS, project_root, relative, safe_iterdir, safe_rglob  # noqa: E402
 
 STALE_AFTER_SECONDS = 7 * 24 * 3600
 
@@ -30,13 +30,13 @@ def main() -> int:
             issues.append(("warn", f"stale CONTEXT.llm: {relative(d, root)}/ (older than its source)"))
 
     # Orphan CONTEXT.llm — files in directories with no source.
-    for ctx in root.rglob("CONTEXT.llm"):
+    for ctx in safe_rglob(root, "CONTEXT.llm"):
         if any(part in IGNORED_DIRS for part in ctx.parts):
             continue
         d = ctx.parent
         if d == root:
             continue
-        if not any(_is_source_file(f) for f in d.iterdir() if f.is_file()):
+        if not any(_is_source_file(f) for f in safe_iterdir(d) if f.is_file()):
             issues.append(("warn", f"orphan CONTEXT.llm: {relative(ctx, root)} (no source files)"))
 
     if not issues:
@@ -52,27 +52,47 @@ def main() -> int:
 
 
 def _code_dirs(root: Path) -> list[Path]:
+    """Walk via os.walk so unreadable subtrees are skipped, not raised."""
+    import os
     out: list[Path] = []
-    for sub in root.rglob("*"):
-        if not sub.is_dir():
+    for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")]
+        d = Path(dirpath)
+        if d == root:
             continue
-        rel_parts = sub.relative_to(root).parts
-        if any(part in IGNORED_DIRS or part.startswith(".") for part in rel_parts):
-            continue
-        if any(_is_source_file(f) for f in sub.iterdir() if f.is_file()):
-            out.append(sub)
+        if any(_is_source_filename(name) for name in filenames):
+            out.append(d)
     return out
 
 
+_SOURCE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java")
+
+
 def _is_source_file(p: Path) -> bool:
-    return p.suffix in {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java"}
+    return p.suffix in _SOURCE_SUFFIXES
+
+
+def _is_source_filename(name: str) -> bool:
+    return name.endswith(_SOURCE_SUFFIXES)
 
 
 def _is_stale(ctx: Path, dir_: Path) -> bool:
-    ctx_mtime = ctx.stat().st_mtime
-    for f in dir_.iterdir():
-        if f.is_file() and _is_source_file(f) and f.stat().st_mtime > ctx_mtime:
-            return True
+    try:
+        ctx_mtime = ctx.stat().st_mtime
+    except OSError:
+        return False
+    try:
+        entries = list(dir_.iterdir())
+    except (PermissionError, OSError):
+        return False
+    for f in entries:
+        try:
+            if not f.is_file():
+                continue
+            if _is_source_file(f) and f.stat().st_mtime > ctx_mtime:
+                return True
+        except OSError:
+            continue
     return False
 
 
