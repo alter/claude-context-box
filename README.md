@@ -299,6 +299,50 @@ bash .claude/ccb-git/uninstall.sh        # if you installed the pre-commit hook
 
 ---
 
+## FAQ
+
+### What about MCP Memory Service?
+
+Old ccb releases (≤ 0.2.x) shipped an installer for
+[doobidoo/mcp-memory-service](https://github.com/doobidoo/mcp-memory-service)
+and a set of `/memory-*` slash commands. **0.3.0 deliberately drops that
+integration.** ccb does not install, configure, or interact with MCP Memory
+in any way.
+
+Why dropped:
+
+- **Karpathy's premise holds.** His original post (the inspiration for the
+  wiki layer here) shows that flat markdown + LLM grounding handles 100+
+  articles / 500K words without RAG. ccb's `compile_wiki.py` /
+  `query_wiki.py` cover the same ground at zero setup cost.
+- **Install footprint.** MCP Memory needs `sentence-transformers`,
+  `sqlite-vec`, and often a C++ toolchain (Xcode CLT / build-essential / VS
+  Build Tools). ccb's value proposition is one curl + stdlib only — adding
+  MCP would break the three-line Quick start.
+- **Per-project vs cross-project.** 0.3.0 keeps everything inside the
+  project (PROJECT.llm, .ccb/, venv) so it travels with the repo. MCP
+  Memory is a long-running global server — a different model.
+- **Claude Code already has auto-memory.** Since v2.1.59 Claude Code
+  records "useful context" automatically, exposed via `/memory`. Layering a
+  third memory store (Claude's auto-memory + ccb daily logs + MCP) just
+  creates three sources of truth.
+- **Old installer was overstepping.** The previous ccb tried to manage MCP
+  as if it were a ccb feature; in practice it was a third-party server with
+  its own lifecycle and failure modes. That coupling was the wrong scope.
+
+What ccb gives you instead, mapped to MCP Memory's pitch:
+
+| MCP Memory feature | ccb 0.3.0 equivalent |
+|---|---|
+| Persistent storage between sessions | `.ccb/daily_log/<date>.md` (auto-captured by SessionEnd) |
+| Semantic search across stored memories | `ccb wiki query "..."` (Haiku grounded in `.ccb/wiki/`) |
+| Memory consolidation / dream-style summarization | `ccb wiki compile` (re-extracts topics from current daily logs) |
+| `/memory-*` slash commands | `/ccb-status`, `/ccb-update`, `/ccb-wiki` |
+
+If you actually want MCP Memory in addition to ccb, install it as a
+standalone Claude Code MCP server (`claude mcp add memory …`) — the two
+don't conflict. ccb just won't do it for you.
+
 ## Why hooks/skills, not shortcuts
 
 - **Hooks vs shortcuts.** Lifecycle hooks run automatically — the old approach
