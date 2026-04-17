@@ -21,6 +21,7 @@ Environment variables:
     CCB_FORCE        if set to 1, recreate the venv from scratch
     CCB_REPO_URL     alternate git remote (default: github.com/alter/claude-context-box)
     CCB_TARBALL_URL  alternate tarball base URL (used as fallback)
+    CCB_LLM          if set to 1, also install ccb[llm] for LLM session summaries
 """
 from __future__ import annotations
 
@@ -141,9 +142,13 @@ def _venv_python_path(venv_dir: Path) -> Path:
 
 
 def _pip_install_ccb(venv_python: Path, source_root: Path) -> None:
-    print(f"  pip install ccb (into venv) ...")
+    extras = ""
+    if os.environ.get("CCB_LLM", "").lower() in {"1", "true", "yes"}:
+        extras = "[llm]"
+    spec = f"{source_root}{extras}"
+    print(f"  pip install ccb{extras} (into venv) ...")
     pip_cmd = [str(venv_python), "-m", "pip", "install", "--quiet",
-               "--upgrade", "--disable-pip-version-check", str(source_root)]
+               "--upgrade", "--disable-pip-version-check", spec]
     proc = subprocess.run(pip_cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.stderr.write(f"pip install failed:\n{proc.stderr}\n")

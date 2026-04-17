@@ -79,6 +79,38 @@ Real-world reasons to reach for it:
 
 Otherwise: install ccb, open Claude Code, forget it exists.
 
+### Optional: LLM-summarized session captures
+
+By default the `SessionEnd` hook records *what* changed (files touched,
+last assistant turn). With this opt-in, it also asks Claude Haiku to extract
+*why* — a 1–2 sentence summary, key technical decisions, and unresolved issues —
+and appends them to `.ccb/daily_log/<date>.md`. The next `SessionStart` hook
+will inject those into the new session's context.
+
+Enable on first install:
+
+```bash
+CCB_LLM=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
+export ANTHROPIC_API_KEY=sk-ant-...   # add to your shell rc to persist
+```
+
+Or enable on an existing install:
+
+```bash
+.claude/ccb-venv/bin/pip install 'claude-context-box[llm]'
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Costs: a Haiku call per session end, capped at 60 KB of transcript and
+1000 output tokens. Single-digit cents per session at current Haiku pricing.
+
+Disable per-invocation: `export CCB_LLM=0`. Override the model via
+`CCB_LLM_MODEL=claude-sonnet-4-6` if you want richer summaries.
+
+The hook silently skips when `ANTHROPIC_API_KEY` is unset, when the
+`anthropic` SDK isn't installed, or when the API call fails — never breaks
+the user's session.
+
 ### Optional: refresh contexts on every `git commit`
 
 Only do this if you commit `PROJECT.llm` / `CONTEXT.llm` to git (i.e. you
@@ -276,14 +308,14 @@ bash tests/e2e/run_docker_e2e.sh # same but in a clean container
 
 ## Roadmap
 
-- **Phase F — LLM-summarized session capture.** `capture_session.py` already
-  refreshes contexts; the slot for an LLM-generated decisions/issues summary
-  via `claude-agent-sdk` (Haiku) is reserved but not yet wired.
 - **Phase G — Wiki layer.** Optional `compile_wiki.py` that turns daily logs
   into a structured `.ccb/wiki/` (Karpathy-style "knowledge as code"), plus a
   `query_wiki.py` CLI for terminal queries without opening Claude Code.
-- **Phase H — Plugin packaging.** Ship as a Claude Code plugin so the
-  installation path becomes `/plugin install ccb` instead of `curl ... | python3`.
+
+Out of scope: Claude Code plugin packaging. The plugin format manages
+skills / hooks via symlinks but cannot do the `CLAUDE.md` merge, venv setup,
+or initial engine population that ccb relies on — distributing as a plugin
+would deliver only a degraded subset (skills only). Curl install stays.
 
 ## License
 

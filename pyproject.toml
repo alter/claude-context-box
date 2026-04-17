@@ -24,6 +24,11 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff"]
+# LLM-summarized session captures (Phase F). Install via:
+#   .claude/ccb-venv/bin/pip install 'claude-context-box[llm]'
+# Then `export ANTHROPIC_API_KEY=...` and the SessionEnd hook will start
+# appending decisions / issues / summary sections to .ccb/daily_log/<date>.md.
+llm = ["anthropic>=0.39"]
 
 [project.scripts]
 ccb = "ccb.cli:main"

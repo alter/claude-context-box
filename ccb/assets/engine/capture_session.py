@@ -2,7 +2,7 @@
 """Background session worker.
 
 Spawned by SessionEnd / PreCompact so the slow stuff (incremental context
-refresh, LLM summarization) doesn't block the hook timeout.
+refresh, optional LLM summarization) doesn't block the hook timeout.
 
 Reads a handoff JSON file written by the hook:
   {"changed_files": ["src/api/handler.py", ...], "transcript": "..."}
@@ -12,13 +12,16 @@ Then:
      PROJECT.llm and the touched CONTEXT.llm files.
   2. Appends a structured entry to .ccb/daily_log/<date>.md with what got
      refreshed (and a transcript pointer).
-  3. (phase F) Optionally calls claude-agent-sdk for a real LLM summary.
+  3. If `anthropic` SDK is available + ANTHROPIC_API_KEY is set, asks Haiku
+     to extract structured decisions / issues / summary from the transcript
+     and appends those sections too. Skipped silently otherwise.
 
 Failures are swallowed — never propagate back to the user's Claude Code session.
 """
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -26,6 +29,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _lib import now_iso, project_root  # noqa: E402
+
+# Cap the slice of transcript we send to Haiku — long sessions can produce
+# multi-megabyte transcripts and we only need the recent decisions.
+TRANSCRIPT_BYTES_LIMIT = 60_000
+LLM_MODEL = "claude-haiku-4-5"
+LLM_TIMEOUT_SECONDS = 30
 
 
 def main() -> int:
@@ -38,7 +47,6 @@ def main() -> int:
             payload = json.loads(handoff_path.read_text(encoding="utf-8"))
         except Exception:
             payload = {}
-        # Consume the handoff — don't leave stale state.
         try:
             handoff_path.unlink()
         except Exception:
@@ -48,6 +56,7 @@ def main() -> int:
     transcript: str = payload.get("transcript") or ""
 
     refreshed = _refresh_contexts(root, changed)
+    summary = _llm_summary(transcript)
 
     log_dir = root / ".ccb" / "daily_log"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -65,8 +74,8 @@ def main() -> int:
         if transcript and Path(transcript).exists():
             size = Path(transcript).stat().st_size
             fh.write(f"- transcript: `{transcript}` ({size} bytes)\n")
-        # TODO(phase F): summarize transcript via claude-agent-sdk and append
-        # a structured "## decisions" / "## issues" section here.
+        if summary:
+            _write_summary(fh, summary)
 
     return 0
 
@@ -92,6 +101,119 @@ def _refresh_contexts(root: Path, changed_files: list[str]) -> list[str]:
     except Exception:
         return []
     return parents
+
+
+# ---- LLM summary -------------------------------------------------------------
+
+
+def _llm_summary(transcript_path: str) -> dict | None:
+    """Best-effort transcript summarization via the anthropic SDK + Haiku.
+
+    Returns a dict with keys 'summary', 'decisions', 'issues' on success.
+    Returns None if anything blocks the call (no SDK, no API key, no
+    transcript, network error, malformed JSON).
+
+    Override the model with CCB_LLM_MODEL; disable entirely with CCB_LLM=0.
+    """
+    if os.environ.get("CCB_LLM", "1").lower() in {"0", "false", "no"}:
+        return None
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return None
+    if not transcript_path:
+        return None
+
+    transcript_file = Path(transcript_path)
+    if not transcript_file.exists():
+        return None
+
+    try:
+        import anthropic  # type: ignore
+    except ImportError:
+        return None
+
+    try:
+        raw = transcript_file.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    if not raw.strip():
+        return None
+    if len(raw) > TRANSCRIPT_BYTES_LIMIT:
+        # Keep the tail — recent decisions matter more than session opening.
+        raw = raw[-TRANSCRIPT_BYTES_LIMIT:]
+
+    prompt = _build_prompt(raw)
+
+    try:
+        client = anthropic.Anthropic()
+        msg = client.messages.create(
+            model=os.environ.get("CCB_LLM_MODEL", LLM_MODEL),
+            max_tokens=1000,
+            timeout=LLM_TIMEOUT_SECONDS,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception:
+        return None
+
+    return _parse_response(msg)
+
+
+def _build_prompt(transcript_excerpt: str) -> str:
+    return (
+        "You are summarizing a Claude Code coding session for a developer's "
+        "long-term project memory. Output ONLY a JSON object — no prose, no "
+        "code fences. Schema:\n"
+        "{\n"
+        '  "summary": "1-2 sentences describing what got done",\n'
+        '  "decisions": ["short imperative statements of technical choices made", ...],\n'
+        '  "issues": ["short imperative statements of unresolved bugs / TODOs / risks", ...]\n'
+        "}\n"
+        "Keep arrays under 6 items each. Skip arrays that are genuinely empty.\n\n"
+        "Session transcript (most recent portion shown if truncated):\n"
+        "---\n"
+        f"{transcript_excerpt}\n"
+        "---\n"
+    )
+
+
+def _parse_response(msg) -> dict | None:
+    try:
+        text = "".join(
+            block.text for block in msg.content if getattr(block, "type", None) == "text"
+        ).strip()
+    except Exception:
+        return None
+    if not text:
+        return None
+
+    # Tolerate stray ```json fences from the model.
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = text.removeprefix("json").strip()
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def _write_summary(fh, summary: dict) -> None:
+    s = (summary.get("summary") or "").strip()
+    decisions = [d for d in (summary.get("decisions") or []) if isinstance(d, str)]
+    issues = [i for i in (summary.get("issues") or []) if isinstance(i, str)]
+
+    if s:
+        fh.write(f"\n#### summary\n{s}\n")
+    if decisions:
+        fh.write("\n#### decisions\n")
+        for d in decisions[:10]:
+            fh.write(f"- {d.strip()}\n")
+    if issues:
+        fh.write("\n#### issues\n")
+        for i in issues[:10]:
+            fh.write(f"- {i.strip()}\n")
 
 
 if __name__ == "__main__":
