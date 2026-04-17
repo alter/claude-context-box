@@ -118,24 +118,48 @@ def safe_rglob(root: Path, pattern: str = "*"):
                 yield p
 
 
+# Single source of truth for source-file extensions across the engine.
+SOURCE_SUFFIXES: tuple[str, ...] = (
+    ".py",
+    ".ts", ".tsx", ".mts", ".cts",
+    ".js", ".jsx", ".mjs", ".cjs",
+    ".vue", ".svelte",
+    ".go",
+    ".rs",
+    ".java", ".kt",
+    ".rb",
+    ".php",
+    ".swift",
+)
+
+# Subset that the TypeScript/JavaScript parsers handle.
+JS_TS_SUFFIXES: frozenset[str] = frozenset({
+    ".ts", ".tsx", ".mts", ".cts",
+    ".js", ".jsx", ".mjs", ".cjs",
+})
+
+
 def _is_source_file(name: str) -> bool:
-    return name.endswith(
-        (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".rb", ".php", ".swift", ".kt")
-    )
+    return name.endswith(SOURCE_SUFFIXES)
 
 
 @dataclass
-class PythonExports:
+class Exports:
+    """Per-file exports. classes/functions cover both Python and JS/TS."""
     classes: list[str]
     functions: list[str]
+    constants: list[str]   # for `export const X = ...` / module-level Python assigns
 
 
-def parse_python_exports(path: Path) -> PythonExports:
+# Python ----------------------------------------------------------------
+
+
+def parse_python_exports(path: Path) -> Exports:
     """Best-effort parse — returns empty exports on syntax error."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError):
-        return PythonExports(classes=[], functions=[])
+    except (SyntaxError, UnicodeDecodeError, OSError):
+        return Exports(classes=[], functions=[], constants=[])
     classes: list[str] = []
     functions: list[str] = []
     for node in tree.body:
@@ -143,13 +167,13 @@ def parse_python_exports(path: Path) -> PythonExports:
             classes.append(node.name)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_"):
             functions.append(node.name)
-    return PythonExports(classes=classes, functions=functions)
+    return Exports(classes=classes, functions=functions, constants=[])
 
 
 def python_imports(path: Path) -> list[str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError):
+    except (SyntaxError, UnicodeDecodeError, OSError):
         return []
     seen: list[str] = []
     for node in ast.walk(tree):
@@ -163,6 +187,179 @@ def python_imports(path: Path) -> list[str]:
         if s not in out:
             out.append(s)
     return out
+
+
+# JavaScript / TypeScript -----------------------------------------------
+#
+# We parse with regex rather than a real AST because shipping Babel/SWC/
+# tree-sitter into the engine venv would be a heavyweight dependency the
+# rest of ccb explicitly avoids (stdlib only). The patterns below are
+# permissive — they cover ESM exports, default exports, named re-exports,
+# and TypeScript-only declarations (interface/type/enum). Misses a few
+# exotic forms (decorators, ambient modules) but covers >95% of real code.
+
+_JS_LINE_COMMENT = re.compile(r"//[^\n]*")
+_JS_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_JS_STRING = re.compile(r"(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)")
+
+# Match `export function name`, `export async function name`, `export default function name`
+_JS_EXPORT_FUNC = re.compile(
+    r"^\s*export\s+(?:default\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)",
+    re.MULTILINE,
+)
+# Match `export class Name`, `export default class Name`, `export abstract class Name`
+_JS_EXPORT_CLASS = re.compile(
+    r"^\s*export\s+(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)",
+    re.MULTILINE,
+)
+# Match `export const|let|var name = ...` (single declaration; tuple destructuring not handled)
+_JS_EXPORT_CONST = re.compile(
+    r"^\s*export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)",
+    re.MULTILINE,
+)
+# TypeScript-only: interface / type / enum
+_TS_EXPORT_DECL = re.compile(
+    r"^\s*export\s+(?:default\s+)?(?:interface|type|enum)\s+([A-Za-z_$][\w$]*)",
+    re.MULTILINE,
+)
+# Named re-exports: `export { a, b as c, default as d } from "..."` (or without `from`)
+_JS_EXPORT_NAMED = re.compile(
+    r"^\s*export\s*\{([^}]+)\}",
+    re.MULTILINE,
+)
+# `import ... from "module"` / `import "module"` / `require("module")` /
+# `import("module")` — group 1 (non-empty in exactly one alternative) is the
+# module specifier. The static-import body uses non-greedy `.*?` so it stops
+# at the `from` keyword instead of swallowing it.
+_JS_IMPORT = re.compile(
+    r"""(?:
+        ^\s*import\s+(?:.*?\s+from\s+)?['"]([^'"]+)['"]   # static import (named/default/side-effect)
+        |
+        \brequire\s*\(\s*['"]([^'"]+)['"]\s*\)            # CommonJS
+        |
+        \bimport\s*\(\s*['"]([^'"]+)['"]\s*\)             # dynamic import
+    )""",
+    re.MULTILINE | re.VERBOSE | re.DOTALL,
+)
+
+
+def _strip_js_comments(text: str) -> str:
+    """Remove only comments — leaves string literals intact.
+
+    Used for import scanning, where the module specifier IS a string literal
+    that we need to keep readable.
+    """
+    text = _JS_LINE_COMMENT.sub("", text)
+    return _JS_BLOCK_COMMENT.sub("", text)
+
+
+def _strip_js_comments_and_strings(text: str) -> str:
+    """Remove comments AND zero out string literals.
+
+    Used for export scanning so things like `const SQL = "export class Fake {}"`
+    don't get misread as exports. Side effect: unusable for import scanning
+    because module specifiers ARE strings — use _strip_js_comments instead.
+    """
+    text = _strip_js_comments(text)
+    return _JS_STRING.sub('""', text)
+
+
+def parse_js_exports(path: Path) -> Exports:
+    """Regex-based exports for .js/.jsx/.ts/.tsx/.mjs/.cjs/.mts/.cts.
+
+    Misses: TypeScript decorators applied to exported items, ambient
+    `declare module {}` blocks, namespace exports. Catches the 95% case.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return Exports(classes=[], functions=[], constants=[])
+    text = _strip_js_comments_and_strings(raw)
+
+    functions = list(dict.fromkeys(_JS_EXPORT_FUNC.findall(text)))
+    classes = list(dict.fromkeys(_JS_EXPORT_CLASS.findall(text) + _TS_EXPORT_DECL.findall(text)))
+    constants = list(dict.fromkeys(_JS_EXPORT_CONST.findall(text)))
+
+    # Named re-exports: pull out individual names. `default as foo` → keep `foo`,
+    # `bar as baz` → keep `baz`, plain `bar` → keep `bar`.
+    for group in _JS_EXPORT_NAMED.findall(text):
+        for token in group.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            # strip optional `<name> as <alias>`
+            parts = [t.strip() for t in token.split(" as ")]
+            name = parts[-1]
+            if name and name not in functions and name not in classes and name not in constants:
+                constants.append(name)
+
+    return Exports(classes=classes, functions=functions, constants=constants)
+
+
+def js_imports(path: Path) -> list[str]:
+    """Yield the raw module specifiers a JS/TS file imports.
+
+    Returns specifiers as written: `react`, `@/lib/foo`, `./bar`, `../../baz`.
+    Caller decides what to do with relative vs package vs alias paths.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return []
+    # Strip only comments — keep string literals so the regex can capture
+    # the module specifier inside them.
+    text = _strip_js_comments(raw)
+    seen: list[str] = []
+    for m in _JS_IMPORT.findall(text):
+        # m is a 3-tuple from the alternation, exactly one element non-empty.
+        spec = next((g for g in m if g), "")
+        if spec and spec not in seen:
+            seen.append(spec)
+    return seen
+
+
+# Polymorphic dispatch ---------------------------------------------------
+
+
+def parse_exports_for_path(path: Path) -> Exports:
+    if path.suffix == ".py":
+        return parse_python_exports(path)
+    if path.suffix in JS_TS_SUFFIXES:
+        return parse_js_exports(path)
+    return Exports(classes=[], functions=[], constants=[])
+
+
+def imports_for_path(path: Path) -> list[str]:
+    if path.suffix == ".py":
+        return python_imports(path)
+    if path.suffix in JS_TS_SUFFIXES:
+        return js_imports(path)
+    return []
+
+
+def count_source_files(d: Path, recursive: bool = True) -> int:
+    """Count source files in a directory. Recursive walk skips IGNORED_DIRS."""
+    if not d.exists():
+        return 0
+    if not recursive:
+        try:
+            return sum(
+                1 for p in d.iterdir()
+                if p.is_file() and p.suffix in SOURCE_SUFFIXES
+            )
+        except OSError:
+            return 0
+    total = 0
+    for dirpath, dirnames, filenames in os.walk(d, onerror=lambda _e: None):
+        dirnames[:] = [x for x in dirnames if x not in IGNORED_DIRS and not x.startswith(".")]
+        for name in filenames:
+            if name.endswith(SOURCE_SUFFIXES):
+                total += 1
+    return total
+
+
+# Backwards-compatible alias used by older imports.
+PythonExports = Exports
 
 
 def relative(path: Path, root: Path) -> str:

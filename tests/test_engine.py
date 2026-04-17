@@ -245,6 +245,179 @@ def test_update_paths_accepts_files_and_resolves_to_parent(tmp_path: Path) -> No
     assert api_ctx.exists(), "passing a file path should refresh its parent dir"
 
 
+# JS/TS support ----------------------------------------------------------
+
+
+def _make_nextjs_project(root: Path) -> None:
+    """Build a Next.js-shaped fixture: deeply-nested app/ tree + lib/ + workers/."""
+    (root / "package.json").write_text('{"name":"demo-next"}\n')
+    (root / "tsconfig.json").write_text('{}\n')
+
+    # app/ — deeply nested, only one .tsx at top level (app/page.tsx) but
+    # many in subroutes. The old engine reported "1 source file" for app/
+    # because it only looked at direct children.
+    app = root / "app"
+    (app / "(dashboard)" / "billing").mkdir(parents=True)
+    (app / "(marketing)" / "pricing").mkdir(parents=True)
+    (app / "page.tsx").write_text(
+        "/**\n * Top-level landing page.\n */\n"
+        "import { Hero } from '@/lib/ui'\n"
+        "export default function Page() { return <Hero /> }\n"
+    )
+    (app / "(dashboard)" / "billing" / "page.tsx").write_text(
+        "import { client } from '@/lib/api'\n"
+        "export const revalidate = 60\n"
+        "export default async function Billing() { return null }\n"
+    )
+    (app / "(marketing)" / "pricing" / "page.tsx").write_text(
+        "import { tiers } from '../../../lib/pricing'\n"
+        "export default function Pricing() { return null }\n"
+    )
+
+    # lib/
+    lib = root / "lib"
+    lib.mkdir()
+    (lib / "ui.tsx").write_text(
+        "export function Hero() { return null }\n"
+        "export class Button {}\n"
+    )
+    (lib / "api.ts").write_text(
+        "import { kv } from '../workers/kv'\n"
+        "export const client = { fetch: () => null }\n"
+        "export type ApiResponse<T> = { data: T }\n"
+    )
+    (lib / "pricing.ts").write_text(
+        "export const tiers = ['free', 'pro']\n"
+        "export interface Tier { name: string }\n"
+    )
+
+    # workers/
+    workers = root / "workers"
+    workers.mkdir()
+    (workers / "kv.ts").write_text(
+        "export const kv = { get: (_k: string) => null }\n"
+    )
+
+
+def test_describe_dir_counts_recursively_for_nextjs(tmp_path: Path) -> None:
+    _make_nextjs_project(tmp_path)
+    _run("update.py", tmp_path)
+    project_llm = (tmp_path / "PROJECT.llm").read_text()
+    # Old bug: app/ reported "1 source file" because only direct children were counted.
+    # Now app/ has 3 .tsx files across subdirs — a recursive count picks them all up.
+    # The describe_dir output for app/ is the JSDoc from app/page.tsx (it wins over
+    # the source-count fallback), so the count line lives elsewhere — assert that
+    # at least the JSDoc landed.
+    assert "Top-level landing page" in project_llm
+
+
+def test_describe_dir_uses_recursive_count_when_no_doc(tmp_path: Path) -> None:
+    """No README, no JSDoc, no docstring → fallback to recursive count, not direct."""
+    (tmp_path / "package.json").write_text('{"name":"x"}\n')
+    deep = tmp_path / "src" / "modules" / "auth"
+    deep.mkdir(parents=True)
+    (deep / "login.ts").write_text("export const a = 1\n")
+    (deep / "logout.ts").write_text("export const b = 2\n")
+    (tmp_path / "src" / "modules" / "billing").mkdir()
+    (tmp_path / "src" / "modules" / "billing" / "stripe.ts").write_text("export const c = 3\n")
+
+    _run("update.py", tmp_path)
+    project_llm = (tmp_path / "PROJECT.llm").read_text()
+    # src/ has 3 .ts files in total recursively, 0 directly.
+    assert "src/: 3 source file(s)" in project_llm
+
+
+def test_typescript_exports_extracted_into_context(tmp_path: Path) -> None:
+    _make_nextjs_project(tmp_path)
+    _run("update.py", tmp_path)
+    ui_ctx = (tmp_path / "lib" / "CONTEXT.llm").read_text()
+    assert "ui.tsx::fn Hero" in ui_ctx
+    assert "ui.tsx::class Button" in ui_ctx
+    assert "api.ts::const client" in ui_ctx
+    # TypeScript-only declarations also appear
+    assert "api.ts::class ApiResponse" in ui_ctx  # interface/type/enum classified as class
+    assert "pricing.ts::class Tier" in ui_ctx
+
+
+def test_typescript_imports_recorded_in_context(tmp_path: Path) -> None:
+    _make_nextjs_project(tmp_path)
+    _run("update.py", tmp_path)
+    api_ctx = (tmp_path / "lib" / "CONTEXT.llm").read_text()
+    assert "@imports:" in api_ctx
+    # api.ts imports `../workers/kv` — the raw specifier appears
+    assert "../workers/kv" in api_ctx
+
+
+def test_dependency_graph_resolves_nextjs_aliases(tmp_path: Path) -> None:
+    """`import ... from '@/lib/ui'` should produce app -> lib edge."""
+    _make_nextjs_project(tmp_path)
+    _run("update.py", tmp_path)
+    project_llm = (tmp_path / "PROJECT.llm").read_text()
+    assert "@dependency_graph:" in project_llm
+    # The placeholder comment should be gone — there ARE edges now.
+    assert "# populated as modules grow" not in project_llm
+    # app imports from lib (via @/ alias and via relative path).
+    assert "app: [lib]" in project_llm
+    # lib imports from workers (relative path).
+    assert "lib: [workers]" in project_llm
+
+
+def test_jsdoc_summary_used_as_purpose(tmp_path: Path) -> None:
+    """index.ts JSDoc at top of file becomes @purpose for the dir."""
+    (tmp_path / "package.json").write_text('{"name":"x"}\n')
+    svc = tmp_path / "services"
+    svc.mkdir()
+    (svc / "index.ts").write_text(
+        "/**\n * HTTP service layer.\n * Wraps fetch with auth + retry.\n */\n"
+        "export const svc = {}\n"
+    )
+    _run("update.py", tmp_path)
+    ctx = (tmp_path / "services" / "CONTEXT.llm").read_text()
+    assert "HTTP service layer." in ctx
+
+
+def test_export_named_reexports_captured(tmp_path: Path) -> None:
+    """`export { foo, bar as baz } from './x'` should add `foo` and `baz` to exports."""
+    (tmp_path / "package.json").write_text('{"name":"x"}\n')
+    pkg = tmp_path / "lib"
+    pkg.mkdir()
+    (pkg / "internal.ts").write_text("export const foo = 1\nexport const bar = 2\n")
+    (pkg / "public.ts").write_text("export { foo, bar as baz } from './internal'\n")
+    _run("update.py", tmp_path)
+    ctx = (tmp_path / "lib" / "CONTEXT.llm").read_text()
+    assert "public.ts::const foo" in ctx
+    assert "public.ts::const baz" in ctx
+
+
+def test_export_inside_string_or_comment_not_captured(tmp_path: Path) -> None:
+    """Defensive: parser strips comments + strings before scanning."""
+    (tmp_path / "package.json").write_text('{"name":"x"}\n')
+    pkg = tmp_path / "lib"
+    pkg.mkdir()
+    (pkg / "tricky.ts").write_text(
+        "// export function fakeFn() {}\n"
+        "/* export class FakeClass {} */\n"
+        "const SQL = `export function fakeSql() {}`\n"
+        "export function realFn() { return SQL }\n"
+    )
+    _run("update.py", tmp_path)
+    ctx = (tmp_path / "lib" / "CONTEXT.llm").read_text()
+    assert "tricky.ts::fn realFn" in ctx
+    assert "fakeFn" not in ctx
+    assert "FakeClass" not in ctx
+    assert "fakeSql" not in ctx
+
+
+def test_python_workflow_unchanged(tmp_path: Path) -> None:
+    """Sanity: the JS/TS additions didn't regress Python parsing."""
+    _make_project(tmp_path)
+    _run("update.py", tmp_path)
+    api_ctx = (tmp_path / "src" / "api" / "CONTEXT.llm").read_text()
+    # Python uses `def`, JS/TS uses `fn` — verify Python still says def.
+    assert "handler.py::class Router" in api_ctx
+    assert "handler.py::def create_user" in api_ctx
+
+
 def test_cleancode_finds_unreferenced_function(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "__init__.py").write_text("")
