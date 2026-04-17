@@ -199,24 +199,27 @@ grep -q "def goodbye" "$TARGET/src/api/CONTEXT.llm" \
     || fail "refreshed CONTEXT.llm missing the new export 'goodbye'"
 ok "background worker refreshed CONTEXT.llm with new exports"
 
-# ---- 12. Optional pre-commit hook -----------------------------------------
+# ---- 12. Optional pre-commit hook (via bash installer in target, not ccb CLI)
 echo "==> optional pre-commit hook"
 git -C "$TARGET" init -q
 git -C "$TARGET" config user.email "e2e@example.com"
 git -C "$TARGET" config user.name  "E2E"
 
-PYTHONPATH="$REPO_ROOT" python3 -m ccb install-git-hook --dir "$TARGET" >/dev/null
-[ -f "$TARGET/.git/hooks/pre-commit" ] || fail "pre-commit hook not installed"
-ok "pre-commit hook installed"
+[ -f "$TARGET/.claude/ccb-git/install.sh" ] || fail "install.sh not copied into target"
+ok "ccb-git assets installed to target"
 
-# Verify it runs cleanly when there are no staged changes.
+(cd "$TARGET" && bash .claude/ccb-git/install.sh) >/dev/null
+[ -f "$TARGET/.git/hooks/pre-commit" ] || fail "pre-commit hook not installed"
+ok "pre-commit hook installed via bash installer"
+
+# Verify it runs cleanly on a real commit.
 git -C "$TARGET" add -A
 git -C "$TARGET" commit -q -m "initial" || fail "pre-commit hook errored on first commit"
 ok "pre-commit hook runs without errors on a real commit"
 
-PYTHONPATH="$REPO_ROOT" python3 -m ccb uninstall-git-hook --dir "$TARGET" >/dev/null
+(cd "$TARGET" && bash .claude/ccb-git/uninstall.sh) >/dev/null
 [ ! -f "$TARGET/.git/hooks/pre-commit" ] || fail "pre-commit hook not removed by uninstall"
-ok "pre-commit hook removable"
+ok "pre-commit hook removable via bash uninstaller"
 
 # ---- 13. Uninstall ---------------------------------------------------------
 echo "==> uninstall"

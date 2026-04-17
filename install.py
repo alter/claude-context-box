@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 """ccb installer entry point.
 
-Installs Claude Context Box into the current directory (or `CCB_DIR`).
-Runs entirely from the standard library — no pip, no venv pollution.
+What it does, in order:
+  1. Resolves the target project (CCB_DIR or $PWD).
+  2. Refuses to run inside the ccb source repo itself (guard).
+  3. Fetches ccb source (git clone, falling back to tarball download).
+  4. Creates an isolated virtualenv at <target>/.claude/ccb-venv/.
+  5. `pip install`s ccb into that venv (no global / user-site pollution).
+  6. Runs `ccb install --dir <target>` inside the venv to copy assets and
+     merge CLAUDE.md / settings.json.
+  7. Drops a shim at <target>/.claude/bin/ccb so the user can run `ccb` without
+     activating the venv.
 
+Usage:
     curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
 
 Environment variables:
-    CCB_DIR   target project directory (default: $PWD)
-    CCB_REF   git ref / branch / tag of ccb to install (default: main)
-    CCB_FORCE if set to 1, force overwrite of .claude/{skills,hooks,ccb-engine}
+    CCB_DIR          target project directory (default: $PWD)
+    CCB_REF          git ref / branch / tag of ccb to install (default: main)
+    CCB_FORCE        if set to 1, recreate the venv from scratch
+    CCB_REPO_URL     alternate git remote (default: github.com/alter/claude-context-box)
+    CCB_TARBALL_URL  alternate tarball base URL (used as fallback)
 """
 from __future__ import annotations
 
@@ -33,8 +44,6 @@ def main() -> int:
     target_dir = Path(os.environ.get("CCB_DIR", os.getcwd())).resolve()
     ref = os.environ.get("CCB_REF", DEFAULT_REF)
     force = os.environ.get("CCB_FORCE", "").lower() in {"1", "true", "yes"}
-    # CCB_REPO_URL lets tests / forks point at an alternate git remote
-    # (file:// paths and bare repos are supported).
     repo_url = os.environ.get("CCB_REPO_URL", DEFAULT_REPO_URL)
     tarball_base = os.environ.get("CCB_TARBALL_URL", DEFAULT_TARBALL_URL)
 
@@ -44,29 +53,54 @@ def main() -> int:
         )
         return 1
 
-    print(f"ccb installer: ref={ref}  target={target_dir}")
-    print(f"  source: {repo_url}")
+    if not target_dir.exists():
+        sys.stderr.write(f"target does not exist: {target_dir}\n")
+        return 1
+
+    if _is_ccb_source(target_dir):
+        sys.stderr.write(
+            f"refusing to install: {target_dir} looks like the ccb source repo.\n"
+            "Run from a different project directory.\n"
+        )
+        return 1
+
+    print(f"ccb installer")
+    print(f"  target: {target_dir}")
+    print(f"  source: {repo_url}@{ref}")
 
     with tempfile.TemporaryDirectory(prefix="ccb-install-") as tmp:
         source_root = _fetch(ref, Path(tmp), repo_url, tarball_base)
-        return _run_ccb_install(source_root, target_dir, force)
+        venv_python = _setup_venv(target_dir, force=force)
+        _pip_install_ccb(venv_python, source_root)
+        rc = _run_ccb_install(venv_python, target_dir, force=force)
+        if rc != 0:
+            return rc
+        _write_shim(target_dir, venv_python)
+
+    print()
+    print(f"ccb installed. Try:")
+    print(f"  .claude/bin/ccb status")
+    print(f"  (add .claude/bin to your PATH to use bare `ccb`)")
+    return 0
+
+
+# ---- repo fetch -------------------------------------------------------------
 
 
 def _fetch(ref: str, tmp_dir: Path, repo_url: str, tarball_base: str) -> Path:
-    """Fetch ccb source. Prefer git clone; fall back to tarball download."""
     if shutil.which("git"):
         repo_dir = tmp_dir / "repo"
-        print(f"cloning {repo_url}@{ref} ...")
+        print(f"  cloning {repo_url}@{ref} ...")
         rc = subprocess.call(
             ["git", "clone", "--depth", "1", "--branch", ref, repo_url, str(repo_dir)],
             stdout=subprocess.DEVNULL,
         )
         if rc == 0:
             return repo_dir
-        print("git clone failed; falling back to tarball download")
+        print("  git clone failed; falling back to tarball")
 
     url = f"{tarball_base}/{ref}"
-    print(f"downloading {url} ...")
+    print(f"  downloading {url} ...")
     with urllib.request.urlopen(url) as resp:
         data = resp.read()
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
@@ -75,18 +109,86 @@ def _fetch(ref: str, tmp_dir: Path, repo_url: str, tarball_base: str) -> Path:
     return extracted
 
 
-def _run_ccb_install(source_root: Path, target_dir: Path, force: bool) -> int:
-    cmd = [
-        sys.executable, "-c",
-        "import sys; sys.path.insert(0, sys.argv[1]); "
-        "from ccb.cli import main; "
-        "args = ['install', '--dir', sys.argv[2]] + (['--force'] if sys.argv[3] == '1' else []); "
-        "sys.exit(main(args))",
-        str(source_root),
-        str(target_dir),
-        "1" if force else "0",
-    ]
-    return subprocess.call(cmd)
+# ---- venv setup -------------------------------------------------------------
+
+
+def _setup_venv(target_dir: Path, *, force: bool) -> Path:
+    """Create or reuse <target>/.claude/ccb-venv/. Returns path to venv python."""
+    venv_dir = target_dir / ".claude" / "ccb-venv"
+    venv_python = _venv_python_path(venv_dir)
+
+    if venv_dir.exists() and force:
+        print(f"  removing existing venv: {venv_dir}")
+        shutil.rmtree(venv_dir)
+
+    if not venv_python.exists():
+        print(f"  creating venv: {venv_dir}")
+        venv_dir.parent.mkdir(parents=True, exist_ok=True)
+        rc = subprocess.call([sys.executable, "-m", "venv", str(venv_dir)])
+        if rc != 0:
+            sys.stderr.write("failed to create venv\n")
+            sys.exit(1)
+    else:
+        print(f"  reusing existing venv: {venv_dir}")
+
+    return venv_python
+
+
+def _venv_python_path(venv_dir: Path) -> Path:
+    if os.name == "nt":
+        return venv_dir / "Scripts" / "python.exe"
+    return venv_dir / "bin" / "python"
+
+
+def _pip_install_ccb(venv_python: Path, source_root: Path) -> None:
+    print(f"  pip install ccb (into venv) ...")
+    pip_cmd = [str(venv_python), "-m", "pip", "install", "--quiet",
+               "--upgrade", "--disable-pip-version-check", str(source_root)]
+    proc = subprocess.run(pip_cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        sys.stderr.write(f"pip install failed:\n{proc.stderr}\n")
+        sys.exit(1)
+
+
+# ---- run ccb install --------------------------------------------------------
+
+
+def _run_ccb_install(venv_python: Path, target_dir: Path, *, force: bool) -> int:
+    args = [str(venv_python), "-m", "ccb", "install", "--dir", str(target_dir)]
+    if force:
+        args.append("--force")
+    return subprocess.call(args)
+
+
+# ---- shim writer -------------------------------------------------------------
+
+
+def _write_shim(target_dir: Path, venv_python: Path) -> None:
+    bin_dir = target_dir / ".claude" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    shim = bin_dir / "ccb"
+    venv_ccb = venv_python.parent / "ccb"
+    if os.name == "nt":
+        venv_ccb = venv_python.parent / "ccb.exe"
+    shim.write_text(
+        "#!/usr/bin/env bash\n"
+        "# ccb shim — calls the ccb CLI installed inside .claude/ccb-venv/\n"
+        f'exec "{venv_ccb}" "$@"\n',
+        encoding="utf-8",
+    )
+    shim.chmod(0o755)
+
+
+# ---- guard ------------------------------------------------------------------
+
+
+def _is_ccb_source(path: Path) -> bool:
+    pyproj = path / "pyproject.toml"
+    return (
+        (path / "ccb" / "assets" / "claude_md").is_dir()
+        and pyproj.is_file()
+        and "claude-context-box" in pyproj.read_text(errors="ignore")
+    )
 
 
 if __name__ == "__main__":

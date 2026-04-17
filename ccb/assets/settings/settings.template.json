@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_start.py\""
+            "command": "{{ccb_python}} \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_start.py\""
           }
         ]
       }
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_end.py\""
+            "command": "{{ccb_python}} \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_end.py\""
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre_compact.py\""
+            "command": "{{ccb_python}} \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre_compact.py\""
           }
         ]
       }
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post_tool_use.py\""
+            "command": "{{ccb_python}} \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post_tool_use.py\""
           }
         ]
       }
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/instructions_loaded.py\""
+            "command": "{{ccb_python}} \"${CLAUDE_PROJECT_DIR}/.claude/hooks/instructions_loaded.py\""
           }
         ]
       }

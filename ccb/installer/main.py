@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -23,6 +24,10 @@ SKILLS_DIR = ASSETS_ROOT / "skills"
 HOOKS_DIR = ASSETS_ROOT / "hooks"
 ENGINE_DIR = ASSETS_ROOT / "engine"
 
+# Placeholder used in settings.template.json + SKILL.md so the installer can
+# substitute the right interpreter (per-project venv if present, else python3).
+PYTHON_PLACEHOLDER = "{{ccb_python}}"
+
 
 def install(target_dir: str = ".", force: bool = False) -> int:
     target = Path(target_dir).resolve()
@@ -41,9 +46,20 @@ def install(target_dir: str = ".", force: bool = False) -> int:
     _copy_dir(SKILLS_DIR, claude_dir / "skills", force=force)
     _copy_dir(HOOKS_DIR, claude_dir / "hooks", force=force)
     _copy_dir(ENGINE_DIR, claude_dir / "ccb-engine", force=force)
+    _copy_dir(ASSETS_ROOT / "git", claude_dir / "ccb-git", force=force)
+    _chmod_exec(claude_dir / "ccb-git" / "install.sh")
+    _chmod_exec(claude_dir / "ccb-git" / "uninstall.sh")
+    _chmod_exec(claude_dir / "ccb-git" / "pre-commit")
+
+    python_token = _resolve_python_token(claude_dir)
+    print(f"  hook interpreter: {python_token}")
+    _substitute_python(claude_dir / "skills", python_token)
 
     if SETTINGS_TEMPLATE.exists():
-        ccb_settings = json.loads(SETTINGS_TEMPLATE.read_text(encoding="utf-8"))
+        raw = SETTINGS_TEMPLATE.read_text(encoding="utf-8").replace(
+            PYTHON_PLACEHOLDER, python_token
+        )
+        ccb_settings = json.loads(raw)
         outcome = merge_settings_json(claude_dir / "settings.json", ccb_settings)
         print(f".claude/settings.json: {outcome}")
 
@@ -55,6 +71,40 @@ def install(target_dir: str = ".", force: bool = False) -> int:
 
     print(f"\nccb {ccb.__version__} installed in {target}")
     return 0
+
+
+def _resolve_python_token(claude_dir: Path) -> str:
+    """Return the command Claude Code should use to run hooks/engine scripts.
+
+    Prefers the per-project venv (`.claude/ccb-venv/bin/python`) created by
+    install.py; falls back to bare `python3` so the install still works when
+    someone runs `python -m ccb install` outside the curl flow.
+
+    Returned token uses `${CLAUDE_PROJECT_DIR}` (set by Claude Code in hook
+    contexts) so the project remains relocatable — moving or syncing the
+    project to another machine doesn't break the hook commands.
+    """
+    venv_python = claude_dir / "ccb-venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not venv_python.exists():
+        return "python3"
+    if os.name == "nt":
+        return r"${CLAUDE_PROJECT_DIR}\.claude\ccb-venv\Scripts\python.exe"
+    return "${CLAUDE_PROJECT_DIR}/.claude/ccb-venv/bin/python"
+
+
+def _substitute_python(root: Path, python_token: str) -> None:
+    """Replace PYTHON_PLACEHOLDER in any text file under `root`."""
+    if not root.exists():
+        return
+    for p in root.rglob("*"):
+        if not p.is_file():
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if PYTHON_PLACEHOLDER in text:
+            p.write_text(text.replace(PYTHON_PLACEHOLDER, python_token), encoding="utf-8")
 
 
 def status() -> int:
@@ -98,6 +148,12 @@ def _copy_dir(src: Path, dst: Path, *, force: bool) -> None:
             shutil.copytree(src, dst, dirs_exist_ok=True)
             return
     shutil.copytree(src, dst)
+
+
+def _chmod_exec(p: Path) -> None:
+    if p.exists():
+        mode = p.stat().st_mode
+        p.chmod(mode | 0o111)
 
 
 def _compose_claude_md() -> str:

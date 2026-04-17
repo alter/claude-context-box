@@ -1,14 +1,14 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-context-box"
-version = "0.3.0-dev"
+version = "0.3.0.dev0"
 description = "Self-maintaining context system for Claude Code projects"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = { text = "MIT" }
 authors = [{ name = "Claude Context Box Contributors" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -32,11 +32,19 @@ ccb = "ccb.cli:main"
 Homepage = "https://github.com/alter/claude-context-box"
 Issues = "https://github.com/alter/claude-context-box/issues"
 
-[tool.hatch.build.targets.wheel]
-packages = ["ccb"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ccb*"]
 
-[tool.hatch.build.targets.wheel.shared-data]
-"ccb/assets" = "ccb/assets"
+[tool.setuptools.package-data]
+ccb = [
+    "assets/claude_md/*.md",
+    "assets/skills/*/SKILL.md",
+    "assets/hooks/*.py",
+    "assets/engine/*.py",
+    "assets/git/*",
+    "assets/settings/*.json",
+]
 
 [tool.ruff]
 line-length = 100
