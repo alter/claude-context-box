@@ -144,19 +144,25 @@ def _substitute_python(root: Path, python_token: str) -> None:
 
 
 def status() -> int:
-    target = Path.cwd()
+    """Same report as /ccb-status: delegates to engine/status.py.
+
+    Falls back to a minimal in-process check if the engine isn't installed
+    yet (e.g. someone called `ccb status` before `ccb install`).
+    """
+    target = Path.cwd().resolve()
     if is_ccb_source_repo(target):
         print(f"this is the ccb source repo, not a target install: {target}")
         return 0
 
+    engine_status = target / ".claude" / "ccb-engine" / "status.py"
+    if engine_status.exists():
+        return _run_engine_script(target, engine_status, [])
+
+    # Fallback for the "ccb installed at user level but not in this dir" case.
     claude_dir = target / ".claude"
-    claude_md = target / "CLAUDE.md"
-    settings = claude_dir / "settings.json"
     print(f"target: {target}")
-    print(f"  .claude/: {'present' if claude_dir.exists() else 'missing'}")
-    print(f"  CLAUDE.md: {'present' if claude_md.exists() else 'missing'}")
-    print(f"  settings.json: {'present' if settings.exists() else 'missing'}")
-    print(f"  ccb section in CLAUDE.md: {_has_ccb_block(claude_md)}")
+    print(f"  .claude/: {'present' if claude_dir.exists() else 'missing — run ccb install'}")
+    print("  (engine not installed in this dir — `ccb install` first for full status)")
     return 0
 
 
