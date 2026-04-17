@@ -10,82 +10,123 @@ architecture without re-scanning it on every session.
 > native Claude Code primitives — Skills, Hooks, and additive CLAUDE.md merging.
 > Old releases are not compatible with this branch.
 
+---
+
 ## Quick start
 
-Step 1 — install. From inside your target project (the one ccb should manage):
+From inside the project ccb should manage:
 
 ```bash
 cd /path/to/your/project
 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
-```
-
-That single command does everything: clones ccb to a tempdir, builds an
-isolated venv at `.claude/ccb-venv/`, installs ccb into it, copies skills /
-hooks / engine / git assets into `.claude/`, merges the ccb section into
-`CLAUDE.md` (preserving your existing rules), drops a shim at
-`.claude/bin/ccb`, and runs the initial engine update so `PROJECT.llm` and
-per-module `CONTEXT.llm` files are populated immediately.
-
-Step 2 — verify:
-
-```bash
 .claude/bin/ccb status
 ```
 
-You should see `ccb section in CLAUDE.md: True`, `5 ccb hook(s) registered`,
-`5 skill(s)` installed, and `CONTEXT.llm coverage: N/N dirs (100%)`.
+That's it. Three lines, no further setup required. The first command does
+everything — venv, hooks, skills, engine, CLAUDE.md merge, initial
+PROJECT.llm + CONTEXT.llm population. The `status` call confirms it landed.
 
-Step 3 — open Claude Code in this project. The `SessionStart` hook fires
-automatically and injects `PROJECT.llm` + the latest daily log into Claude's
-context. There is **nothing else to type at session start** — every subsequent
-session inherits state from the previous one via auto-captured daily logs.
+Now open Claude Code in this project. The next section walks through what
+happens.
 
-### Optional follow-ups
+---
 
-Use `ccb` without typing the path each time:
+## Your first session — what to expect
+
+You open Claude Code in a project that just got ccb installed. Concretely:
+
+1. **`SessionStart` hook fires automatically.** It reads `PROJECT.llm` (the
+   architecture map ccb just generated) and the most recent daily log (empty
+   on first run) and injects them into Claude's system prompt. You don't see
+   this happening — Claude just knows the project from turn one.
+
+2. **You work normally.** Ask Claude to fix a bug, add a feature, refactor.
+   Every `Edit` / `Write` Claude makes is silently recorded by the
+   `PostToolUse` hook into `.ccb/state.json`. Nothing visible.
+
+3. **You close the session** (or run out of context — `PreCompact` does the
+   same thing). The `SessionEnd` hook hands the list of touched files to a
+   background worker that:
+   - regenerates `CONTEXT.llm` for the affected modules (incremental — only
+     dirs Claude actually touched, not the whole tree),
+   - appends a summary entry to `.ccb/daily_log/<today>.md` (files touched,
+     last assistant turn, transcript pointer),
+   - if you opted into LLM summaries, also asks Haiku for a structured
+     "decisions / issues / summary" extract.
+
+4. **You open Claude Code again tomorrow.** SessionStart finds yesterday's
+   daily log and injects it alongside PROJECT.llm. Claude opens the new
+   session already knowing what was decided, what got fixed, what's open.
+
+That's the loop. From here, **you almost never type a ccb command yourself.**
+
+---
+
+## Day-to-day — what you actually do
+
+| When this happens | What you do | What ccb does for you |
+|---|---|---|
+| You start a Claude Code session | Nothing | `SessionStart` injects PROJECT.llm + last daily log; if PROJECT.llm is stale, `update.py` runs first |
+| Claude edits files | Nothing | `PostToolUse` records each touched path into `.ccb/state.json` |
+| Claude Code auto-compacts the context mid-session | Nothing | `PreCompact` snapshots state into the daily log so early-session decisions don't evaporate |
+| You close the session | Nothing | `SessionEnd` triggers a background worker that refreshes affected `CONTEXT.llm` files and appends today's daily log |
+| You start another session | Nothing | SessionStart inherits everything — Claude is up to date |
+| Architecture changed materially (new top-level dirs, etc.) and you want refresh now | Type `/ccb-update` in Claude Code, or run `.claude/bin/ccb update` from the shell | Regenerates PROJECT.llm + every CONTEXT.llm |
+| You want to see what Claude knows about the project right now | Type `/ccb-status` or run `.claude/bin/ccb status` | Reports hook count, skill count, CONTEXT.llm coverage, daily-log count |
+| You want a summary of decisions across many sessions | Run `.claude/bin/ccb wiki compile` (needs LLM extra installed — see Optional features) | LLM organizes daily logs into a topic-indexed wiki under `.ccb/wiki/` |
+| You want to ask "what did we decide about X" without opening Claude Code | `.claude/bin/ccb wiki query "..."` | LLM answers grounded in the compiled wiki |
+
+In normal work: install once, open Claude Code, forget ccb exists.
+
+---
+
+## Slash commands inside Claude Code
+
+The installer registers six native skills. Type `/` in Claude Code to see them:
+
+| Skill | What it does |
+|---|---|
+| `/ccb-update` | Regenerates PROJECT.llm + every CONTEXT.llm |
+| `/ccb-status` | Health report (markers, hooks, skills, CONTEXT.llm coverage) |
+| `/ccb-validate` | Lints contexts (missing, stale, orphan, broken refs) |
+| `/ccb-cleancode` | Heuristic dead-code candidates (reports only — never deletes) |
+| `/ccb-deps` | Prints the `@dependency_graph` section of PROJECT.llm |
+| `/ccb-wiki` | Compile or query the daily-log wiki (requires LLM extra) |
+
+---
+
+## CLI commands (when Claude Code isn't open)
+
+The shim at `.claude/bin/ccb` exposes the same operations from the shell. Add
+`.claude/bin` to your PATH if you want bare `ccb`:
 
 ```bash
 echo 'export PATH="$PWD/.claude/bin:$PATH"' >> ~/.zshrc   # or ~/.bashrc
-exec $SHELL                                                # reload shell
-ccb status                                                 # now works bare
+exec $SHELL
 ```
 
-### When do you ever need to run `ccb update` by hand?
-
-**Almost never in day-to-day Claude Code work.** The hooks already do it:
-
-| Trigger | Who refreshes contexts |
+| Command | When it's useful |
 |---|---|
-| You open Claude Code and `PROJECT.llm` is older than your source tree | `SessionStart` hook (synchronous) |
-| Claude finishes a session in which it edited any files | `SessionEnd` hook (background, incremental — only touched dirs) |
-| Claude Code compacts the context mid-session | `PreCompact` hook (snapshot) |
-| Inside a Claude Code session, you want to force a full refresh | Type `/ccb-update` (native skill) |
+| `ccb status` | Verify the install, debug why hooks aren't firing |
+| `ccb update` | CI/CD step (`make refresh-context` before release), after `git pull`, after a mass refactor done in another tool |
+| `ccb wiki compile [--since 7d] [--dry-run]` | Build the topic wiki from daily logs |
+| `ccb wiki query "<question>"` | Answer a question from the wiki without opening Claude Code |
+| `ccb install --force` | Idempotent reinstall of the asset bundle (replaces ccb-owned hooks; user-defined hooks survive) |
+| `ccb uninstall` | Strip the ccb block from CLAUDE.md (keeps `.claude/` so you can reinstall later) |
 
-The bare CLI is for the cases where Claude Code isn't open at all:
+If you're in a CI job, the same shim works without PATH:
+`/path/to/project/.claude/bin/ccb update`.
 
-```bash
-.claude/bin/ccb update    # or `ccb update` if .claude/bin is on PATH
-```
+---
 
-Real-world reasons to reach for it:
+## Optional features
 
-- **CI / pre-release scripts** — regenerate `PROJECT.llm` as a build step,
-  e.g. `make refresh-context` before tagging a release.
-- **After `git pull`** — peek at the updated `PROJECT.llm` before opening
-  Claude Code.
-- **Mass refactor done in another tool** — IDE-renamed everything, you want
-  contexts up to date now without waiting for the next session boundary.
-- **Wrapping in your own git hooks / file watchers / cron.**
+### LLM-summarized session captures
 
-Otherwise: install ccb, open Claude Code, forget it exists.
-
-### Optional: LLM-summarized session captures
-
-By default the `SessionEnd` hook records *what* changed (files touched,
-last assistant turn). With this opt-in, it also asks Claude Haiku to extract
-*why* — a 1–2 sentence summary, key technical decisions, and unresolved issues —
-and appends them to `.ccb/daily_log/<date>.md`. The next `SessionStart` hook
-will inject those into the new session's context.
+By default the SessionEnd hook records *what* changed. With this enabled, it
+also asks Haiku to extract *why* — summary, decisions made, open issues — and
+appends them to `.ccb/daily_log/<date>.md`. Tomorrow's SessionStart picks them
+up and Claude resumes with the full reasoning, not just file diffs.
 
 Enable on first install:
 
@@ -94,149 +135,65 @@ CCB_LLM=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/m
 export ANTHROPIC_API_KEY=sk-ant-...   # add to your shell rc to persist
 ```
 
-Or enable on an existing install:
+Or on an existing install:
 
 ```bash
 .claude/ccb-venv/bin/pip install 'claude-context-box[llm]'
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Costs: a Haiku call per session end, capped at 60 KB of transcript and
-1000 output tokens. Single-digit cents per session at current Haiku pricing.
+Bounded cost: one Haiku call per SessionEnd, transcript truncated to 60 KB,
+1000 output tokens, 30 s timeout. Single-digit cents per session.
+Disable per-call with `CCB_LLM=0`. Override the model with
+`CCB_LLM_MODEL=claude-sonnet-4-6` for richer summaries.
 
-Disable per-invocation: `export CCB_LLM=0`. Override the model via
-`CCB_LLM_MODEL=claude-sonnet-4-6` if you want richer summaries.
+The hook silently skips when the API key is missing, the SDK isn't installed,
+or the network fails — never breaks the session.
 
-The hook silently skips when `ANTHROPIC_API_KEY` is unset, when the
-`anthropic` SDK isn't installed, or when the API call fails — never breaks
-the user's session.
+### Wiki layer (Karpathy-style knowledge base)
 
-### Optional: refresh contexts on every `git commit`
+Same LLM dependency as above. Turns the day-by-day log into topic-indexed
+articles with cross-references. Useful after a stretch of substantial work.
 
-Only do this if you commit `PROJECT.llm` / `CONTEXT.llm` to git (i.e. you
-removed them from `.gitignore` to share with your team):
+```bash
+.claude/bin/ccb wiki compile                # all logs
+.claude/bin/ccb wiki compile --since 30d    # last 30 days only
+.claude/bin/ccb wiki compile --dry-run      # preview, don't write
+.claude/bin/ccb wiki query "what did we decide about auth?"
+```
+
+Output:
+- `.ccb/wiki/index.md` — topic index with intro and cross-links
+- `.ccb/wiki/topics/<slug>.md` — one article per concept (summary,
+  decisions, open issues, modules touched, related topics, source-log refs)
+
+### Pre-commit hook (only if you commit context files)
+
+Default behavior: `PROJECT.llm`, `CONTEXT.llm` files, and the `.ccb/`
+directory are all in `.gitignore` — local to each developer. If your team
+removes them from `.gitignore` to share via git, you'll want them refreshed
+and re-staged on every commit:
 
 ```bash
 bash .claude/ccb-git/install.sh
 ```
 
-### Uninstall
+Behavior:
+- If `.pre-commit-config.yaml` exists, prints the snippet to add to it
+  manually (don't fight the [pre-commit framework](https://pre-commit.com/)).
+- Otherwise installs `.git/hooks/pre-commit` — but **refuses to overwrite an
+  existing non-ccb hook** unless you pass `--force`.
+- The hook re-stages only context files git already tracks. Untracked
+  context files stay untracked.
 
-```bash
-.claude/bin/ccb uninstall                # strips ccb block from CLAUDE.md
-rm -rf .claude/ccb-venv .claude/bin      # then drop the venv + shim
-bash .claude/ccb-git/uninstall.sh        # if you installed the pre-commit hook
-```
+Remove with `bash .claude/ccb-git/uninstall.sh` (refuses to remove a non-ccb
+hook).
 
-## What it does
+---
 
-- **Reads context for you on session start.** A `SessionStart` hook injects
-  `PROJECT.llm` and the most recent daily log into Claude's context — Claude
-  doesn't have to re-scan the tree to "remember" what the project looks like.
-- **Captures decisions when the session ends.** A `SessionEnd` hook appends a
-  brief summary (files touched, last assistant turn, transcript pointer) to
-  `.ccb/daily_log/<date>.md`. The next session inherits it via SessionStart.
-- **Survives context compaction.** A `PreCompact` hook snapshots the same
-  information before Claude Code compresses the conversation, so early-session
-  decisions don't evaporate.
-- **Tracks what changed during the session.** A `PostToolUse` hook records
-  every `Edit` / `Write` in `.ccb/state.json` so updates can be incremental.
-- **Lives next to your existing CLAUDE.md.** Installer uses HTML-comment
-  markers (`<!-- ccb:begin --> ... <!-- ccb:end -->`) so user content above
-  and below the ccb section is preserved on every reinstall.
-- **Skills replace shortcuts.** `/ccb-update`, `/ccb-status`, `/ccb-validate`,
-  `/ccb-cleancode`, `/ccb-deps` are real Claude Code slash commands with
-  proper `SKILL.md` frontmatter — no XML parsing, no description-prompting.
+## Reference
 
-## Install — under the hood
-
-The Quick start command above runs `install.py`, which in order:
-
-1. Refuses to run inside the ccb source repo itself (guard against accidents).
-2. Detects your project's language and package manager (poetry / pip / uv /
-   pnpm / npm / cargo / go).
-3. Clones the ccb source into a tempdir.
-4. Creates an isolated venv at `.claude/ccb-venv/` and `pip install`s ccb into
-   it (no global / user-site pollution).
-5. Copies skills, hooks, engine, and git assets into `.claude/`.
-6. Merges `ccb` keys into `.claude/settings.json` (registers the hooks),
-   preserving any user-defined hooks. Hook commands point at the venv
-   python via `${CLAUDE_PROJECT_DIR}` so the project remains relocatable.
-7. Inserts the ccb-managed block into `CLAUDE.md` between markers (creates
-   the file if absent). Pre-existing user content is left untouched.
-8. Runs the engine update so `PROJECT.llm` + every `CONTEXT.llm` are
-   populated immediately.
-9. Drops a shim at `.claude/bin/ccb` so the user can run `ccb` without
-   activating the venv.
-
-Environment variables for non-default installs:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `CCB_DIR` | `$PWD` | Target project directory |
-| `CCB_REF` | `main` | Git branch / tag / commit to install |
-| `CCB_FORCE` | `0` | Recreate `.claude/ccb-venv/` from scratch |
-| `CCB_REPO_URL` | `https://github.com/alter/claude-context-box.git` | Alternate source (used by tests, mirrors, forks) |
-
-## How automatic context maintenance works
-
-| When | What happens | Hook |
-|---|---|---|
-| Session starts | If `PROJECT.llm` is missing or older than the source tree, `update.py` runs synchronously. Then `PROJECT.llm` + the latest daily log are injected into the system prompt. | `SessionStart` |
-| Claude edits a file | The file path is appended to `.ccb/state.json`. | `PostToolUse` |
-| Claude Code compresses the context | A snapshot is written to `.ccb/daily_log/<date>.md`. | `PreCompact` |
-| Session ends | The change list is handed off to a background worker that refreshes the affected `CONTEXT.llm` files (incremental — only touched dirs) and appends a summary to today's daily log. | `SessionEnd` |
-| `CLAUDE.md` / `.claude/rules/*.md` reload | If `PROJECT.llm` is missing or >7 days old, a `systemMessage` warning is emitted. | `InstructionsLoaded` |
-
-You can opt out of the synchronous SessionStart refresh on huge repos:
-`export CCB_DISABLE_AUTO_UPDATE=1`.
-
-## Manual escape hatches
-
-Lifecycle is automatic — there's nothing to type at session start. You only
-invoke the skills manually when you want to override the defaults.
-
-| Slash command | What it runs |
-|---|---|
-| `/ccb-update` | Regenerates `PROJECT.llm` + every `CONTEXT.llm` |
-| `/ccb-status` | Reports markers, registered hooks, daily-log count, CONTEXT.llm coverage |
-| `/ccb-validate` | Lints contexts (missing, stale, orphan, broken refs) |
-| `/ccb-cleancode` | Heuristic dead-code candidates (reports only — never deletes) |
-| `/ccb-deps` | Prints the `@dependency_graph` section of `PROJECT.llm` |
-
-CLI equivalents (handy in scripts and CI):
-
-```bash
-ccb status
-ccb update
-ccb uninstall --dir /path/to/project
-ccb install-git-hook --dir .       # optional pre-commit integration (below)
-ccb uninstall-git-hook --dir .
-```
-
-## Optional: pre-commit integration
-
-By default, ccb refreshes contexts on session boundaries. If your team commits
-`PROJECT.llm` / `CONTEXT.llm` files into git (i.e. you removed them from
-`.gitignore`), you may also want them refreshed and re-staged on every commit:
-
-```bash
-ccb install-git-hook
-```
-
-What it does:
-
-- If `.pre-commit-config.yaml` exists, prints the snippet to add to that
-  config and does nothing else (don't fight the [pre-commit framework](https://pre-commit.com/)).
-- Otherwise installs `.git/hooks/pre-commit` — but **only if no pre-commit
-  hook already exists**. Use `--force` to replace a non-ccb hook.
-- The hook runs `update.py --paths <staged dirs>` and re-stages only the
-  context files that git already tracks. Untracked context files stay
-  untracked (it never starts checking in files you didn't choose to commit).
-
-Remove with `ccb uninstall-git-hook` (refuses to remove a non-ccb hook).
-
-## What lives where in the target project
+### What lives where in the target project
 
 ```
 your-project/
@@ -246,17 +203,81 @@ your-project/
 │   └── CONTEXT.llm                # per-module interface (auto-regenerated)
 ├── .claude/
 │   ├── settings.json              # hook registrations under "_ccb": true
+│   ├── ccb-venv/                  # isolated venv with the ccb package
+│   ├── bin/ccb                    # shim → ccb-venv's ccb entry point
 │   ├── hooks/                     # session_start.py, session_end.py, ...
-│   ├── skills/                    # ccb-update/, ccb-status/, ...
+│   ├── skills/                    # ccb-update/, ccb-status/, ccb-wiki/, ...
 │   ├── ccb-engine/                # update.py, validate.py, status.py, ...
 │   └── ccb-git/                   # install.sh, uninstall.sh, pre-commit template
 └── .ccb/                          # runtime data (gitignored)
     ├── daily_log/<YYYY-MM-DD>.md  # auto-captured session summaries
+    ├── wiki/                      # compiled topic wiki (after `ccb wiki compile`)
     ├── state.json                 # files touched in current session
+    ├── handoff.json               # one-shot file SessionEnd → background worker
     └── errors.log                 # captured hook exceptions (never user-facing)
 ```
 
-## Why this and not the old `u` / `update` shortcuts
+### Lifecycle hooks
+
+| Hook | Trigger | Action |
+|---|---|---|
+| `SessionStart` | New Claude Code session opens | If PROJECT.llm is stale, run engine update synchronously. Then inject PROJECT.llm + latest daily log into the system prompt. |
+| `PostToolUse` | After every Edit/Write/MultiEdit/NotebookEdit | Append touched file path to `.ccb/state.json` |
+| `PreCompact` | Before Claude Code compresses context | Snapshot state into today's daily log |
+| `SessionEnd` | Session closes | Hand off to background worker → incremental engine refresh + daily-log entry + (opt-in) LLM summary |
+| `InstructionsLoaded` | CLAUDE.md / `.claude/rules/*.md` loaded | Warn via `systemMessage` if PROJECT.llm is missing or >7 days old |
+
+Opt out of the synchronous SessionStart refresh on huge repos:
+`export CCB_DISABLE_AUTO_UPDATE=1`.
+
+### Install env vars
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CCB_DIR` | `$PWD` | Target project directory |
+| `CCB_REF` | `main` | Git branch / tag / commit to install |
+| `CCB_FORCE` | `0` | Recreate `.claude/ccb-venv/` from scratch |
+| `CCB_LLM` | `0` | Also install `ccb[llm]` for LLM session summaries |
+| `CCB_LLM_MODEL` | `claude-haiku-4-5` | Override the model used by Phase F + wiki |
+| `CCB_REPO_URL` | `https://github.com/alter/claude-context-box.git` | Alternate source (forks, mirrors) |
+| `CCB_TARBALL_URL` | `https://codeload.github.com/alter/claude-context-box/tar.gz/refs/heads` | Tarball fallback if git unavailable |
+| `CCB_DISABLE_AUTO_UPDATE` | `0` | Skip the synchronous SessionStart refresh |
+| `ANTHROPIC_API_KEY` | unset | Required for opt-in LLM features (Phase F + wiki) |
+
+### What `install.py` does, step by step
+
+1. Refuses to run inside the ccb source repo itself (guard against accidents).
+2. Detects your project's language and package manager
+   (poetry / pip / uv / pnpm / npm / cargo / go).
+3. Clones the ccb source into a tempdir.
+4. Creates `.claude/ccb-venv/` and `pip install`s ccb into it
+   (no global / user-site pollution).
+5. Copies skills, hooks, engine, and git assets into `.claude/`.
+6. Merges `ccb` keys into `.claude/settings.json` — preserves user-defined
+   hooks; ccb-owned hooks (marked `_ccb: true`) replace prior versions.
+   Hook commands point at the venv python via `${CLAUDE_PROJECT_DIR}` so
+   the project remains relocatable.
+7. Inserts the ccb-managed block into `CLAUDE.md` between
+   `<!-- ccb:begin -->` / `<!-- ccb:end -->` markers. Pre-existing user
+   content above and below the markers is left untouched.
+8. Runs the engine update so PROJECT.llm + every CONTEXT.llm are populated
+   immediately.
+9. Drops a shim at `.claude/bin/ccb` so the user can run `ccb` without
+   activating the venv.
+
+### Uninstall
+
+```bash
+.claude/bin/ccb uninstall                # strips ccb block from CLAUDE.md
+rm -rf .claude/ccb-venv .claude/bin      # drop the venv + shim
+rm -rf .claude/{hooks,skills,ccb-engine,ccb-git}   # drop the assets
+rm -rf .ccb                              # drop runtime data (or keep it as a record)
+bash .claude/ccb-git/uninstall.sh        # if you installed the pre-commit hook
+```
+
+---
+
+## Why hooks/skills, not shortcuts
 
 - **Hooks vs shortcuts.** Lifecycle hooks run automatically — the old approach
   relied on the user remembering to type `u`. With ccb 0.3.0, context refreshes
@@ -264,91 +285,74 @@ your-project/
 - **Skills vs XML.** Native Claude Code skills with frontmatter don't depend
   on Claude correctly parsing `<executable_shortcuts>` blocks — they appear in
   the slash-command menu and have proper `allowed-tools` scoping.
-- **Additive merge vs overwrite.** The previous `merge_claude_md` used regex
+- **Additive merge vs overwrite.** The previous merge_claude_md used regex
   on emoji headings; ccb 0.3.0 uses unambiguous HTML-comment markers that
   survive arbitrary user edits outside them.
-- **Stdlib only.** Hooks, engine, and installer all use the standard library —
-  no pip dependencies in the target project, no venv pollution, nothing extra
-  for the user to install.
+- **Per-project venv vs global pip.** No pollution of the user's site-packages,
+  no PATH conflicts, clean uninstall is `rm -rf .claude/ccb-venv`.
 
-## Source repo layout (for contributors)
+---
+
+## For contributors
 
 ```
 claude-context-box/
 ├── install.py                     # curl entry — clones repo, runs ccb.cli install
-├── pyproject.toml                 # hatchling build, ccb = ccb.cli:main
+├── pyproject.toml                 # setuptools, ccb = ccb.cli:main, [llm] extra
 ├── ccb/
-│   ├── cli.py                     # `ccb {install,status,update,uninstall}`
+│   ├── cli.py                     # `ccb {install,status,update,uninstall,wiki,...}`
 │   ├── installer/
 │   │   ├── main.py                # orchestration
 │   │   ├── merger.py              # additive CLAUDE.md / settings.json merge
 │   │   ├── guard.py               # refuses to install into ccb source repo
-│   │   └── detector.py            # language / package manager / venv probe
+│   │   ├── detector.py            # language / package manager / venv probe
+│   │   └── git_hook.py            # optional pre-commit hook installer (Python)
 │   └── assets/                    # everything that gets copied into the target
-│       ├── claude_md/             # numbered modular sections
+│       ├── claude_md/             # numbered modular sections (00..80)
 │       ├── skills/                # SKILL.md files
-│       ├── hooks/                 # python hook scripts
+│       ├── hooks/                 # python hook scripts (stdlib only)
 │       ├── settings/              # settings.json template
-│       └── engine/                # update / status / validate / cleancode
+│       ├── engine/                # update / status / validate / cleancode / wiki
+│       └── git/                   # install.sh / uninstall.sh / pre-commit template
 └── tests/
-    ├── test_*.py                  # unit / merger / guard / hooks / engine
+    ├── test_*.py                  # unit / merger / guard / hooks / engine / wiki / llm
     └── e2e/
-        ├── run_local_e2e.sh       # full install → update → status → uninstall
-        ├── run_docker_e2e.sh      # same, in python:3.11-slim
+        ├── run_local_e2e.sh       # full install → update → ... against a local bare clone
+        ├── run_docker_e2e.sh      # same in python:3.11-slim
+        ├── run_real_curl.sh       # real curl-from-github e2e (run after pushing)
         └── Dockerfile
 ```
 
 Run the suite:
 
 ```bash
-python3 -m pytest tests/         # unit + integration
-bash tests/e2e/run_local_e2e.sh  # end-to-end against a local bare clone
-bash tests/e2e/run_docker_e2e.sh # same but in a clean container
+python3 -m pytest tests/         # 77 unit + integration
+bash tests/e2e/run_local_e2e.sh  # local end-to-end
+bash tests/e2e/run_docker_e2e.sh # same, in a clean container
+bash tests/e2e/run_real_curl.sh  # real github.com → curl → install (after `git push`)
 ```
 
-### Optional: wiki layer (Karpathy-style knowledge base)
+LLM features (Phase F + wiki) are tested via a faked anthropic SDK injected
+through PYTHONPATH — the suite runs without network or API key. Real Anthropic
+calls require a manual smoke against `.claude/bin/ccb wiki compile` with
+`ANTHROPIC_API_KEY` set.
 
-Daily logs accumulate raw session-by-session events; the wiki turns them into
-a topic-organized knowledge base with cross-references. Same dependency as
-Phase F (`anthropic` SDK + `ANTHROPIC_API_KEY`).
-
-**Compile** the wiki from your daily logs:
-
-```bash
-.claude/bin/ccb wiki compile                # all logs
-.claude/bin/ccb wiki compile --since 30d    # last 30 days only
-.claude/bin/ccb wiki compile --dry-run      # preview without writing
-```
-
-Or invoke `/ccb-wiki` from inside Claude Code.
-
-Output: `.ccb/wiki/index.md` (topic index with cross-links) +
-`.ccb/wiki/topics/<slug>.md` (one article per concept extracted from the
-logs, each with summary / decisions / open issues / modules touched / related
-topics / source-log references).
-
-**Query** the wiki without opening Claude Code:
-
-```bash
-.claude/bin/ccb wiki query "what did we decide about auth?"
-.claude/bin/ccb wiki query "any open issues with the rate limiter?"
-```
-
-The CLI loads the wiki, asks Haiku to answer grounded in those documents,
-and prints the response. Useful in shell sessions, scripts, or as a sanity
-check before opening a long-form Claude Code session.
+---
 
 ## Roadmap
 
-The 0.3.0 architecture is feature-complete for the goals it set out to meet
-(self-maintaining context with native Claude Code primitives). Future work
-is iterative — sharper heuristics in the engine, richer SessionEnd capture,
-better cross-language support — not new architecture.
+The 0.3.0 architecture is feature-complete for its goals (self-maintaining
+context with native Claude Code primitives). Future work is iterative —
+sharper engine heuristics, richer SessionEnd capture, better cross-language
+support — not new architecture.
 
 Out of scope: Claude Code plugin packaging. The plugin format manages
-skills / hooks via symlinks but cannot do the `CLAUDE.md` merge, venv setup,
-or initial engine population that ccb relies on — distributing as a plugin
-would deliver only a degraded subset (skills only). Curl install stays.
+skills / hooks via symlinks but cannot do the CLAUDE.md merge, venv setup,
+or initial engine population that ccb relies on. Distributing as a plugin
+would deliver only a degraded subset (skills only). Curl install stays the
+primary path.
+
+---
 
 ## License
 
