@@ -50,23 +50,45 @@ exec $SHELL                                                # reload shell
 ccb status                                                 # now works bare
 ```
 
-Refresh `PROJECT.llm` + every `CONTEXT.llm` on demand
-(normally automatic via the `SessionEnd` hook):
+### When do you ever need to run `ccb update` by hand?
+
+**Almost never in day-to-day Claude Code work.** The hooks already do it:
+
+| Trigger | Who refreshes contexts |
+|---|---|
+| You open Claude Code and `PROJECT.llm` is older than your source tree | `SessionStart` hook (synchronous) |
+| Claude finishes a session in which it edited any files | `SessionEnd` hook (background, incremental — only touched dirs) |
+| Claude Code compacts the context mid-session | `PreCompact` hook (snapshot) |
+| Inside a Claude Code session, you want to force a full refresh | Type `/ccb-update` (native skill) |
+
+The bare CLI is for the cases where Claude Code isn't open at all:
 
 ```bash
-.claude/bin/ccb update         # or just `ccb update` if PATH is set
+.claude/bin/ccb update    # or `ccb update` if .claude/bin is on PATH
 ```
 
-Or, from inside Claude Code, type `/ccb-update` (a native skill).
+Real-world reasons to reach for it:
 
-Refresh contexts automatically on every `git commit`
-(only do this if you commit `PROJECT.llm` / `CONTEXT.llm` to git):
+- **CI / pre-release scripts** — regenerate `PROJECT.llm` as a build step,
+  e.g. `make refresh-context` before tagging a release.
+- **After `git pull`** — peek at the updated `PROJECT.llm` before opening
+  Claude Code.
+- **Mass refactor done in another tool** — IDE-renamed everything, you want
+  contexts up to date now without waiting for the next session boundary.
+- **Wrapping in your own git hooks / file watchers / cron.**
+
+Otherwise: install ccb, open Claude Code, forget it exists.
+
+### Optional: refresh contexts on every `git commit`
+
+Only do this if you commit `PROJECT.llm` / `CONTEXT.llm` to git (i.e. you
+removed them from `.gitignore` to share with your team):
 
 ```bash
 bash .claude/ccb-git/install.sh
 ```
 
-To remove ccb later:
+### Uninstall
 
 ```bash
 .claude/bin/ccb uninstall                # strips ccb block from CLAUDE.md
