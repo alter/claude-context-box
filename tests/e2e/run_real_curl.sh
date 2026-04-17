@@ -82,13 +82,20 @@ grep -q "CLAUDE_PROJECT_DIR.*ccb-venv/bin/python" /work/target/.claude/settings.
 ok "settings.json hooks use venv python via \${CLAUDE_PROJECT_DIR}"
 
 # Shim works.
-/work/target/.claude/bin/ccb status > /work/status.out
+/work/target/.claude/bin/ccb status > /work/status.out 2>&1
+diagnose() {
+    echo "--- /work/status.out ---" >&2
+    cat /work/status.out >&2
+    echo "--- /work/target/.claude/settings.json ---" >&2
+    cat /work/target/.claude/settings.json >&2
+    echo "------------------------" >&2
+}
 grep -q "ccb section in CLAUDE.md: True" /work/status.out \
-    || fail "shim ccb status reported wrong state"
-grep -qE "[0-9]+ ccb hook\(s\)" /work/status.out \
-    || fail "shim ccb status missed hooks count"
-grep -qE "[0-9]+ skill\(s\)" /work/status.out \
-    || fail "shim ccb status missed skills count"
+    || { diagnose; fail "shim ccb status reported wrong state"; }
+grep -qE "[0-9]+ ccb hook" /work/status.out \
+    || { diagnose; fail "shim ccb status missed hooks count"; }
+grep -qE "[0-9]+ skill" /work/status.out \
+    || { diagnose; fail "shim ccb status missed skills count"; }
 ok "shim ccb status works"
 
 # install.py advertises that PROJECT.llm + CONTEXT.llm are populated
