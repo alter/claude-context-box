@@ -179,7 +179,8 @@ def describe_dir(d: Path) -> str:
     Heuristics, in order:
       - first non-empty line of <d>/README.md
       - module docstring of <d>/__init__.py (Python)
-      - JSDoc summary at top of <d>/index.{ts,tsx,js,jsx,mjs,cjs} (JS/TS)
+      - JSDoc summary at top of an entry-point file (Next.js page.tsx,
+        layout.tsx; generic index.{ts,tsx,js,jsx}; Vite/Vue main.{ts,js})
       - first docstring of any *.py file in this dir
       - fallback: total recursive source-file count under this dir
     """
@@ -188,17 +189,14 @@ def describe_dir(d: Path) -> str:
         for line in readme.read_text(encoding="utf-8", errors="ignore").splitlines():
             line = line.strip().lstrip("#").strip()
             if line:
-                return line[:120]
+                return _summarize(line)
 
     init = d / "__init__.py"
     if init.exists():
         doc = _module_docstring(init)
         if doc:
-            return doc[:120]
+            return _summarize(doc)
 
-    # Look for an entry-point file. Different ecosystems use different names:
-    # Next.js → page.tsx / layout.tsx, generic JS → index.{ts,tsx,js,jsx},
-    # Vite/Vue → main.{ts,js}.
     candidates = []
     for stem in ("index", "page", "layout", "main"):
         for ext in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
@@ -207,15 +205,32 @@ def describe_dir(d: Path) -> str:
         if c.exists():
             doc = _js_top_doc(c)
             if doc:
-                return f"{doc[:100]} (from {c.name})"
+                return f"{_summarize(doc)} (from {c.name})"
 
     for py in sorted(d.glob("*.py")):
         doc = _module_docstring(py)
         if doc:
-            return f"{doc[:100]} (from {py.name})"
+            return f"{_summarize(doc)} (from {py.name})"
 
     total = count_source_files(d, recursive=True)
     return f"{total} source file(s)"
+
+
+def _summarize(text: str, max_len: int = 100) -> str:
+    """Reduce a multi-line / long doc to a single short line.
+
+    Keeps only the first paragraph (until blank line), collapses internal
+    whitespace, truncates on a word boundary with an ellipsis if still too
+    long. Output is always single-line and ≤ max_len characters.
+    """
+    paragraph = text.split("\n\n", 1)[0]
+    one_line = " ".join(paragraph.split())
+    if len(one_line) <= max_len:
+        return one_line
+    cutoff = one_line.rfind(" ", 0, max_len - 1)
+    if cutoff < max_len // 2:
+        cutoff = max_len - 1
+    return one_line[:cutoff].rstrip(" ,;:.") + "…"
 
 
 def _js_top_doc(path: Path) -> str | None:

@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import IGNORED_DIRS, project_root, safe_iterdir  # noqa: E402
+from _lib import IGNORED_DIRS, SOURCE_SUFFIXES, project_root, safe_iterdir  # noqa: E402
 
 
 def main() -> int:
@@ -122,16 +122,20 @@ def _check_state(root: Path) -> str:
 
 
 def _check_context_coverage(root: Path) -> str:
-    """Walk the tree once with os.walk so unreadable subtrees are skipped, not raised."""
+    """Walk the tree once with os.walk so unreadable subtrees are skipped, not raised.
+
+    Counts directories containing ANY language ccb knows about — not just
+    Python. Mirrors the source-file detection used by update.py /
+    iter_code_dirs so coverage figures match what /ccb-update actually walked.
+    """
     import os
     code_dirs: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
-        # prune ignored / hidden subtrees in-place
         dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")]
         d = Path(dirpath)
         if d == root:
             continue
-        if any(name.endswith(".py") for name in filenames):
+        if any(name.endswith(SOURCE_SUFFIXES) for name in filenames):
             code_dirs.append(d)
     with_ctx = sum(1 for d in code_dirs if (d / "CONTEXT.llm").exists())
     if not code_dirs:

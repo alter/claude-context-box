@@ -408,6 +408,52 @@ def test_export_inside_string_or_comment_not_captured(tmp_path: Path) -> None:
     assert "fakeSql" not in ctx
 
 
+def test_describe_dir_truncates_long_docstring_on_word_boundary(tmp_path: Path) -> None:
+    """Long docstrings must be cut to one short line ending with an ellipsis,
+    not chopped mid-word. Reproduces the user-visible bug where scripts/
+    showed up as 'Test contact form for CRLF header injection vulnerability.
+    Sends known attack payloads and verifies  (from test-contact-injection.py)'
+    — wrapped onto two lines, ending mid-word, breaking the @architecture
+    table format."""
+    (tmp_path / "package.json").write_text('{"name":"x"}\n')
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "long_doc.py").write_text(
+        '"""Test contact form for CRLF header injection vulnerability. '
+        "Sends known attack payloads and verifies that no header smuggling "
+        "occurs across all five fields. Designed to be safe against "
+        'production endpoints — only requests, no POST."""\n'
+    )
+    _run("update.py", tmp_path)
+    project_llm = (tmp_path / "PROJECT.llm").read_text()
+    arch_lines = [l for l in project_llm.splitlines() if l.startswith("  scripts/:")]
+    assert len(arch_lines) == 1, "scripts/ should produce exactly one @architecture line"
+    line = arch_lines[0]
+    # Must fit in the ≤100 char description budget plus the path prefix and
+    # the optional " (from <file>)" suffix — overall well under 200.
+    assert len(line) < 200
+    # Must end either with an ellipsis (truncated) or with the (from ...) tag.
+    assert line.endswith(")") or line.rstrip().endswith("…"), line
+    # Must NOT end mid-word with trailing space.
+    assert not line.rstrip(")").rstrip().endswith("verifies"), \
+        "truncation cut mid-word and left a trailing space"
+
+
+def test_status_coverage_counts_typescript_dirs(tmp_path: Path) -> None:
+    """status.py CONTEXT.llm coverage must include TS dirs, not only Python."""
+    (tmp_path / "package.json").write_text('{"name":"x"}\n')
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib" / "ui.tsx").write_text("export const x = 1\n")
+    (tmp_path / "lib" / "CONTEXT.llm").write_text("@directory: lib\n")
+    (tmp_path / "workers").mkdir()
+    (tmp_path / "workers" / "kv.ts").write_text("export const kv = {}\n")
+    # workers/ deliberately has no CONTEXT.llm yet
+    proc = _run("status.py", tmp_path)
+    assert proc.returncode == 0
+    # 2 code dirs total (lib, workers); 1 has CONTEXT.llm.
+    assert "1/2 dirs" in proc.stdout, f"got: {proc.stdout!r}"
+
+
 def test_python_workflow_unchanged(tmp_path: Path) -> None:
     """Sanity: the JS/TS additions didn't regress Python parsing."""
     _make_project(tmp_path)
