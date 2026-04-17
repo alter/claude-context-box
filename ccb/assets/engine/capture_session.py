@@ -12,9 +12,9 @@ Then:
      PROJECT.llm and the touched CONTEXT.llm files.
   2. Appends a structured entry to .ccb/daily_log/<date>.md with what got
      refreshed (and a transcript pointer).
-  3. If `anthropic` SDK is available + ANTHROPIC_API_KEY is set, asks Haiku
-     to extract structured decisions / issues / summary from the transcript
-     and appends those sections too. Skipped silently otherwise.
+  3. If an LLM backend is reachable (claude CLI or anthropic SDK), asks
+     Haiku to extract structured decisions / issues / summary from the
+     transcript and appends those sections too. Skipped silently otherwise.
 
 Failures are swallowed — never propagate back to the user's Claude Code session.
 """
@@ -29,11 +29,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _lib import now_iso, project_root  # noqa: E402
+from _llm import call_llm, parse_json_response  # noqa: E402
 
 # Cap the slice of transcript we send to Haiku — long sessions can produce
 # multi-megabyte transcripts and we only need the recent decisions.
 TRANSCRIPT_BYTES_LIMIT = 60_000
-LLM_MODEL = "claude-haiku-4-5"
 LLM_TIMEOUT_SECONDS = 30
 
 
@@ -107,28 +107,21 @@ def _refresh_contexts(root: Path, changed_files: list[str]) -> list[str]:
 
 
 def _llm_summary(transcript_path: str) -> dict | None:
-    """Best-effort transcript summarization via the anthropic SDK + Haiku.
+    """Best-effort transcript summarization via Haiku.
 
     Returns a dict with keys 'summary', 'decisions', 'issues' on success.
-    Returns None if anything blocks the call (no SDK, no API key, no
-    transcript, network error, malformed JSON).
+    Returns None if anything blocks the call (no LLM backend reachable,
+    no transcript, network error, malformed JSON).
 
     Override the model with CCB_LLM_MODEL; disable entirely with CCB_LLM=0.
     """
     if os.environ.get("CCB_LLM", "1").lower() in {"0", "false", "no"}:
-        return None
-    if not os.environ.get("ANTHROPIC_API_KEY"):
         return None
     if not transcript_path:
         return None
 
     transcript_file = Path(transcript_path)
     if not transcript_file.exists():
-        return None
-
-    try:
-        import anthropic  # type: ignore
-    except ImportError:
         return None
 
     try:
@@ -142,19 +135,11 @@ def _llm_summary(transcript_path: str) -> dict | None:
         raw = raw[-TRANSCRIPT_BYTES_LIMIT:]
 
     prompt = _build_prompt(raw)
-
-    try:
-        client = anthropic.Anthropic()
-        msg = client.messages.create(
-            model=os.environ.get("CCB_LLM_MODEL", LLM_MODEL),
-            max_tokens=1000,
-            timeout=LLM_TIMEOUT_SECONDS,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except Exception:
+    text = call_llm(prompt, max_tokens=1000, timeout=LLM_TIMEOUT_SECONDS)
+    if text is None:
         return None
-
-    return _parse_response(msg)
+    data = parse_json_response(text)
+    return data if isinstance(data, dict) else None
 
 
 def _build_prompt(transcript_excerpt: str) -> str:
@@ -173,30 +158,6 @@ def _build_prompt(transcript_excerpt: str) -> str:
         f"{transcript_excerpt}\n"
         "---\n"
     )
-
-
-def _parse_response(msg) -> dict | None:
-    try:
-        text = "".join(
-            block.text for block in msg.content if getattr(block, "type", None) == "text"
-        ).strip()
-    except Exception:
-        return None
-    if not text:
-        return None
-
-    # Tolerate stray ```json fences from the model.
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text.removeprefix("json").strip()
-
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, dict):
-        return None
-    return data
 
 
 def _write_summary(fh, summary: dict) -> None:

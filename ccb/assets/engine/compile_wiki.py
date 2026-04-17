@@ -10,8 +10,11 @@ Usage:
     python3 compile_wiki.py --since 7d     # only logs from the last N days
     python3 compile_wiki.py --dry-run      # print plan, write nothing
 
-Requires the `anthropic` SDK (install via `pip install ccb[llm]`) and
-ANTHROPIC_API_KEY. Produces:
+Needs an LLM backend — either the `claude` CLI on PATH (uses your Claude
+Code subscription credentials, no extra billing) or the `anthropic` SDK
+plus ANTHROPIC_API_KEY. See `_llm.py` for backend selection details.
+
+Produces:
 
     .ccb/wiki/
     ├── index.md          ← top-level navigation (themes + back-references)
@@ -22,7 +25,6 @@ ANTHROPIC_API_KEY. Produces:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -31,8 +33,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _lib import now_iso, project_root  # noqa: E402
+from _llm import (  # noqa: E402
+    available_backends,
+    call_llm,
+    parse_json_response,
+    setup_hint,
+)
 
-WIKI_MODEL = "claude-haiku-4-5"
 INPUT_BYTES_LIMIT = 200_000   # cap how many bytes of logs we feed the model
 MAX_OUTPUT_TOKENS = 4000
 LLM_TIMEOUT_SECONDS = 60
@@ -44,7 +51,8 @@ def main() -> int:
                         help="Only consume daily logs from the last N days (e.g. 7d, 30d)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print what would be written, don't touch disk")
-    parser.add_argument("--model", default=os.environ.get("CCB_LLM_MODEL", WIKI_MODEL))
+    parser.add_argument("--model", default=None,
+                        help="Override CCB_LLM_MODEL for this run")
     args = parser.parse_args()
 
     root = project_root()
@@ -62,14 +70,11 @@ def main() -> int:
     raw = _concat_logs(logs)
     print(f"  total input: {len(raw)} bytes (limit: {INPUT_BYTES_LIMIT})")
 
-    if not _check_anthropic_available():
-        print(
-            "ccb wiki compile requires the anthropic SDK and ANTHROPIC_API_KEY.\n"
-            "  install: .claude/ccb-venv/bin/pip install 'claude-context-box[llm]'\n"
-            "  then:    export ANTHROPIC_API_KEY=sk-ant-...",
-            file=sys.stderr,
-        )
+    backends = available_backends()
+    if not backends:
+        print(setup_hint(), file=sys.stderr)
         return 1
+    print(f"  llm backend: {backends[0]}")
 
     plan = _ask_model_for_plan(raw, args.model)
     if plan is None:
@@ -146,19 +151,7 @@ def _concat_logs(logs: list[Path]) -> str:
 # ---- LLM call --------------------------------------------------------------
 
 
-def _check_anthropic_available() -> bool:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return False
-    try:
-        import anthropic  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
-def _ask_model_for_plan(raw_logs: str, model: str) -> dict | None:
-    import anthropic  # type: ignore
-
+def _ask_model_for_plan(raw_logs: str, model: str | None) -> dict | None:
     prompt = (
         "You are compiling a developer's coding-session daily logs into a "
         "navigable knowledge base. Read the logs and produce ONLY a JSON object "
@@ -191,30 +184,19 @@ def _ask_model_for_plan(raw_logs: str, model: str) -> dict | None:
         "---\n"
     )
 
-    try:
-        client = anthropic.Anthropic()
-        msg = client.messages.create(
-            model=model,
-            max_tokens=MAX_OUTPUT_TOKENS,
-            timeout=LLM_TIMEOUT_SECONDS,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"anthropic call failed: {exc}", file=sys.stderr)
+    text = call_llm(
+        prompt,
+        model=model,
+        max_tokens=MAX_OUTPUT_TOKENS,
+        timeout=LLM_TIMEOUT_SECONDS,
+    )
+    if text is None:
+        print("LLM call returned no output", file=sys.stderr)
         return None
 
-    try:
-        text = "".join(
-            b.text for b in msg.content if getattr(b, "type", None) == "text"
-        ).strip()
-    except Exception:
-        return None
-    if text.startswith("```"):
-        text = text.strip("`").removeprefix("json").strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as exc:
-        print(f"model returned invalid JSON: {exc}", file=sys.stderr)
+    data = parse_json_response(text)
+    if data is None:
+        print("model returned invalid JSON", file=sys.stderr)
         return None
     return data if isinstance(data, dict) else None
 

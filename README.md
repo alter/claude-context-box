@@ -128,32 +128,42 @@ also asks Haiku to extract *why* — summary, decisions made, open issues — an
 appends them to `.ccb/daily_log/<date>.md`. Tomorrow's SessionStart picks them
 up and Claude resumes with the full reasoning, not just file diffs.
 
-Enable on first install:
+ccb tries two LLM backends, in order:
 
-```bash
-CCB_LLM=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
-export ANTHROPIC_API_KEY=sk-ant-...   # add to your shell rc to persist
-```
+1. **`claude` CLI** (subprocess). Uses your Claude Code subscription
+   credentials — no extra billing, no API key, **no setup required** if you
+   already have Claude Code installed.
+2. **`anthropic` Python SDK**. Requires `ANTHROPIC_API_KEY` env var.
+   For headless / CI / API-only environments without a `claude` CLI on PATH.
 
-Or on an existing install:
+If `claude` is on PATH, you get LLM session captures **for free** (covered by
+your existing subscription). Otherwise, install the SDK and set a key:
 
 ```bash
 .claude/ccb-venv/bin/pip install 'claude-context-box[llm]'
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-...   # add to your shell rc to persist
 ```
 
-Bounded cost: one Haiku call per SessionEnd, transcript truncated to 60 KB,
-1000 output tokens, 30 s timeout. Single-digit cents per session.
-Disable per-call with `CCB_LLM=0`. Override the model with
-`CCB_LLM_MODEL=claude-sonnet-4-6` for richer summaries.
+Or enable both at install time:
 
-The hook silently skips when the API key is missing, the SDK isn't installed,
-or the network fails — never breaks the session.
+```bash
+CCB_LLM=1 curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/install.py | python3 -
+```
+
+Bounded cost (SDK path): one Haiku call per SessionEnd, transcript truncated
+to 60 KB, 1000 output tokens, 30 s timeout. Single-digit cents per session.
+Disable per-call with `CCB_LLM=0`. Override the model with
+`CCB_LLM_MODEL=claude-sonnet-4-6` for richer summaries. Force a backend with
+`CCB_LLM_BACKEND=cli` or `CCB_LLM_BACKEND=sdk`.
+
+The hook silently skips when neither backend is reachable — never breaks the
+session.
 
 ### Wiki layer (Karpathy-style knowledge base)
 
-Same LLM dependency as above. Turns the day-by-day log into topic-indexed
-articles with cross-references. Useful after a stretch of substantial work.
+Same LLM backend rules as above (`claude` CLI preferred → `anthropic` SDK
+fallback). Turns the day-by-day log into topic-indexed articles with
+cross-references. Useful after a stretch of substantial work.
 
 ```bash
 .claude/bin/ccb wiki compile                # all logs
