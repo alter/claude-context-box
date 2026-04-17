@@ -71,7 +71,7 @@ That's the loop. From here, **you almost never type a ccb command yourself.**
 | Claude Code auto-compacts the context mid-session | Nothing | `PreCompact` snapshots state into the daily log so early-session decisions don't evaporate |
 | You close the session | Nothing | `SessionEnd` triggers a background worker that refreshes affected `CONTEXT.llm` files and appends today's daily log |
 | You start another session | Nothing | SessionStart inherits everything — Claude is up to date |
-| Architecture changed materially (new top-level dirs, etc.) and you want refresh now | Type `/ccb-update` in Claude Code, or run `.claude/bin/ccb update` from the shell | Regenerates PROJECT.llm + every CONTEXT.llm |
+| Architecture changed materially (new top-level dirs, etc.) and you want refresh now | Type `/ccb-update` in Claude Code, or run `.claude/bin/ccb update` from the shell | Regenerates PROJECT.llm + every CONTEXT.llm. The skill also instructs Claude to re-read PROJECT.llm into the current session's context — the SessionStart hook only fires at session start, so mid-session refreshes need this manual pull. |
 | You want to see what Claude knows about the project right now | Type `/ccb-status` or run `.claude/bin/ccb status` | Reports hook count, skill count, CONTEXT.llm coverage, daily-log count |
 | You want a summary of decisions across many sessions | Run `.claude/bin/ccb wiki compile` (needs LLM extra installed — see Optional features) | LLM organizes daily logs into a topic-indexed wiki under `.ccb/wiki/` |
 | You want to ask "what did we decide about X" without opening Claude Code | `.claude/bin/ccb wiki query "..."` | LLM answers grounded in the compiled wiki |
@@ -216,6 +216,28 @@ your-project/
     ├── handoff.json               # one-shot file SessionEnd → background worker
     └── errors.log                 # captured hook exceptions (never user-facing)
 ```
+
+### How Claude actually reads the context
+
+There is one strong injection mechanism and two weak signals:
+
+1. **`SessionStart` hook (strong).** When you open a new Claude Code session,
+   the hook reads PROJECT.llm + the latest daily log and returns them via
+   `hookSpecificOutput.additionalContext`. Claude Code injects that into
+   the system prompt — Claude knows the project from turn one. Fires **only
+   on session start**, not on any in-session event.
+2. **CLAUDE.md mentions PROJECT.llm (weak).** The ccb block points Claude
+   at PROJECT.llm and `<module>/CONTEXT.llm`, but Claude doesn't read them
+   automatically — only if it decides it needs to (via the Read tool).
+3. **`InstructionsLoaded` hook (advisory).** Warns via `systemMessage` if
+   PROJECT.llm is missing or >7 days old. Doesn't inject content.
+
+**Mid-session refreshes:** when you type `/ccb-update` in the middle of an
+existing session, the file on disk gets refreshed but the *injected* copy
+in Claude's system prompt is still the version from session start. The
+`/ccb-update` skill closes that gap by instructing Claude to Read the
+freshly-written PROJECT.llm into the current turn's context. Without that
+explicit re-read, mid-session updates only land in the *next* session.
 
 ### Lifecycle hooks
 
