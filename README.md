@@ -26,6 +26,20 @@ That's it. Three lines, no further setup required. The first command does
 everything — venv, hooks, skills, engine, CLAUDE.md merge, initial
 PROJECT.llm + CONTEXT.llm population. The `status` call confirms it landed.
 
+Two optional follow-ups:
+
+```bash
+.claude/bin/ccb memory init   # iterative-research memory: INDEX.md, validation
+                              # protocol, experiment folders (see "Memory structure")
+.claude/bin/ccb update        # manual context refresh — only needed after mass
+                              # changes made OUTSIDE Claude Code (git pull, codegen);
+                              # the install already populated everything, and hooks
+                              # keep it fresh from here on
+```
+
+On slow filesystems (WSL `/mnt/c`, NFS) prepend `CCB_UPDATE_TIMEOUT=600` to
+the install command so the initial context generation isn't cut short.
+
 **Requires Python ≥ 3.10** — the interpreter you pipe the installer into.
 ccb lives in its own isolated venv (`.claude/ccb-venv/`, created from that
 interpreter), so your project's existing `.venv` is never touched and its
