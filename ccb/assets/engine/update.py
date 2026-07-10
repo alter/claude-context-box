@@ -225,33 +225,40 @@ def _index_facts(root: Path) -> list[str]:
         f"**Updated:** {now_iso()}",
     ]
 
-    pool_dir = root / "memory" / "strategy-pool"
+    # "pool" / "tasks" are the 0.8+ names; "strategy-pool" / "experiments"
+    # the pre-0.8 ones — a scaffold has one set or the other.
+    pool_dir = root / "memory" / "pool"
+    if not pool_dir.is_dir():
+        pool_dir = root / "memory" / "strategy-pool"
     pools = sorted(p.name for p in safe_iterdir(pool_dir) if p.is_file() and p.suffix == ".md")
     if pools:
-        lines.append(f"**Strategy pools:** {', '.join(pools)}")
+        lines.append(f"**Pool:** {', '.join(pools)}")
 
-    exp_root = root / "memory" / "experiments"
-    ranges = sorted((d for d in safe_iterdir(exp_root) if d.is_dir()), key=lambda d: d.name)
+    tasks_root = root / "memory" / "tasks"
+    if not tasks_root.is_dir():
+        tasks_root = root / "memory" / "experiments"
+    tasks = sorted((d for d in safe_iterdir(tasks_root) if d.is_dir()), key=lambda d: d.name)
     latest_spec: tuple[float, str] | None = None
-    if ranges:
-        lines.append("**Experiment ranges:**")
-        for r in ranges:
-            iters = sorted((d for d in safe_iterdir(r) if d.is_dir()), key=lambda d: d.name)
+    if tasks:
+        lines.append("**Tasks:**")
+        for t in tasks:
+            runs = sorted((d for d in safe_iterdir(t) if d.is_dir()), key=lambda d: d.name)
             newest = ""
-            for it in iters:
-                spec = it / "task-spec.md"
+            for run in runs:
+                spec = run / "task-spec.md"
                 try:
-                    mtime = spec.stat().st_mtime if spec.exists() else it.stat().st_mtime
+                    mtime = spec.stat().st_mtime if spec.exists() else run.stat().st_mtime
                 except OSError:
                     continue
                 if latest_spec is None or mtime > latest_spec[0]:
-                    latest_spec = (mtime, f"{r.name}/{it.name}")
+                    latest_spec = (mtime, f"{t.name}/{run.name}")
                 if not newest or mtime >= newest[0]:
-                    newest = (mtime, it.name)
+                    newest = (mtime, run.name)
             detail = f", latest: {newest[1]}" if newest else ""
-            lines.append(f"- {r.name}: {len(iters)} iteration(s){detail}")
+            lines.append(f"- {t.name}: {len(runs)} run(s){detail}")
     if latest_spec:
-        lines.append(f"**Most recently active:** memory/experiments/{latest_spec[1]}/")
+        rel_tasks = tasks_root.name
+        lines.append(f"**Most recently active:** memory/{rel_tasks}/{latest_spec[1]}/")
 
     daily_dir = root / ".ccb" / "daily_log"
     logs = sorted(p.name for p in safe_iterdir(daily_dir) if p.suffix == ".md")

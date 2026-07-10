@@ -34,15 +34,19 @@ def main(argv: list[str] | None = None) -> int:
 
     p_mem = sub.add_parser(
         "memory",
-        help="Scaffold/manage the memory/ structure for iterative research projects",
+        help="Scaffold/manage the memory/ structure for recurring tasks and large projects",
     )
     mem_sub = p_mem.add_subparsers(dest="memory_cmd", required=True)
     mem_sub.add_parser(
         "init", help="Create INDEX.md, AGENTS.md and memory/ skeleton (never overwrites)"
     )
-    p_me = mem_sub.add_parser("experiment", help="Start a new experiment iteration folder")
-    p_me.add_argument("range_name", help="Experiment range, e.g. books-25")
-    p_me.add_argument("version", help="Iteration id, e.g. v3-500-strats")
+    p_mt = mem_sub.add_parser(
+        "task",
+        aliases=["experiment"],
+        help="Start a new run of a recurring task",
+    )
+    p_mt.add_argument("task_name", help="Task name, e.g. books-25 or nightly-import")
+    p_mt.add_argument("run_id", help="Run id, e.g. v3-500-strats or 2026-07-10")
     mem_sub.add_parser("status", help="Report which memory files exist")
 
     p_gh = sub.add_parser(

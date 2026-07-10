@@ -64,13 +64,23 @@ def test_session_start_injects_memory_files(tmp_path: Path) -> None:
     mem = tmp_path / "memory"
     mem.mkdir()
     (mem / "validation-protocol.md").write_text("# PROTOCOL\nnever skip OOS\n")
-    (mem / "current-experiment.md").write_text("# current\nbooks-25 v3\n")
+    (mem / "current-task.md").write_text("# current\nbooks-25 v3\n")
     out = _run_hook("session_start.py", {}, tmp_path)
     ctx = out["hookSpecificOutput"]["additionalContext"]
     assert "pool: v2-300" in ctx
     assert "never skip OOS" in ctx
     assert "books-25 v3" in ctx
     assert ctx.index("INDEX.md") < ctx.index("PROJECT.llm")
+
+
+def test_session_start_injects_legacy_current_experiment(tmp_path: Path) -> None:
+    """Pre-0.8 scaffolds used current-experiment.md — still injected."""
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    (mem / "current-experiment.md").write_text("# current\nbooks-25 v3 legacy\n")
+    out = _run_hook("session_start.py", {}, tmp_path)
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "books-25 v3 legacy" in ctx
 
 
 def test_session_start_truncates_huge_memory_file(tmp_path: Path) -> None:

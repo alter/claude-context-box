@@ -298,13 +298,14 @@ def test_memory_proxies_to_engine_script(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(installer_main, "_run_engine_script", fake_run_engine_script)
 
     class Args:
-        range_name = "books-25"
-        version = "v3-500"
+        task_name = "books-25"
+        run_id = "v3-500"
 
     rc = installer_main.memory("experiment", Args())
     assert rc == 0
     assert captured["script"] == "memory.py"
-    assert captured["args"] == ["experiment", "books-25", "v3-500"]
+    # The legacy "experiment" subcommand is normalized to "task".
+    assert captured["args"] == ["task", "books-25", "v3-500"]
 
 
 def test_memory_refuses_in_source_repo(tmp_path: Path, monkeypatch, capsys) -> None:

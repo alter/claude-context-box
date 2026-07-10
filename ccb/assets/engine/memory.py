@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
-"""Scaffold and manage the memory/ structure for iterative research projects.
+"""Scaffold and manage the memory/ structure for recurring work and large projects.
 
-The layout keeps context, a validation protocol, and iteration history across
-many returns to the same experiment ranges (see README "Memory structure"):
+Two kinds of tasks exist. One-off work ("did it, forgot it") is already
+covered by ccb's daily log + wiki — it needs no manual structure. This
+layout is for the other kind: RECURRING tasks that get re-run with new
+variants, options, or data, plus large projects where the whole tree must
+not be held in context — INDEX.md acts as a routing table instead.
 
     INDEX.md                        # entry point — read first every session
     AGENTS.md                       # critical rules for any coding agent
     memory/
       validation-protocol.md        # sacred file — never violate
-      current-experiment.md         # the active iteration
+      current-task.md               # the active task/run
       decisions-log.md              # key decisions and insights
-      strategy-pool/all-strategies.md
-      experiments/<range>/<version>/task-spec.md
-      results/
-      research-rag/
+      pool/catalog.md               # reusable inputs recurring tasks draw from
+      tasks/<task>/<run>/task-spec.md
+      results/                      # cross-run comparisons, best performers
+      research/                     # new theories, approaches, reference notes
 
 Commands:
-  python memory.py init                          # create missing pieces (never overwrites)
-  python memory.py experiment <range> <version>  # new iteration folder + task-spec.md
-  python memory.py status                        # what exists, what's missing
+  python memory.py init                   # create missing pieces (never overwrites)
+  python memory.py task <name> <run>      # new run of a recurring task
+                                          #   (alias: experiment)
+  python memory.py status                 # what exists, what's missing
 """
 from __future__ import annotations
 
@@ -33,16 +37,15 @@ from _lib import now_iso, project_root, safe_iterdir  # noqa: E402
 INDEX_TEMPLATE = """\
 # INDEX — project state as of {date}
 
-> Entry point. Read this file FIRST in every session. Update it after every
-> significant run and before any context compaction.
+> Entry point and routing table. Read this file FIRST in every session —
+> then read ONLY what it points to. Update it after every significant run
+> and before any context compaction.
 
 <!-- ccb:index:begin -->
 _Auto-maintained by ccb — filesystem facts only. Edit OUTSIDE this block._
 
 **Updated:** (refreshed on the next ccb update)
 <!-- ccb:index:end -->
-
-**Current strategy pool:** (none yet — see memory/strategy-pool/)
 
 **Best results so far:**
 - (none yet)
@@ -52,7 +55,7 @@ _Auto-maintained by ccb — filesystem facts only. Edit OUTSIDE this block._
 
 **Validation protocol:** memory/validation-protocol.md (MANDATORY — follow exactly)
 
-**Current experiment:** memory/current-experiment.md
+**Current task:** memory/current-task.md
 """
 
 AGENTS_TEMPLATE = """\
@@ -60,52 +63,58 @@ AGENTS_TEMPLATE = """\
 
 **CRITICAL RULES:**
 
-1. Before any backtest, generation, or analysis, READ memory/validation-protocol.md
+1. Read INDEX.md FIRST, before any other exploration. Then read only what it
+   points to — do not hold the whole project in context.
+2. Before any run of a recurring task, READ memory/validation-protocol.md
    and follow it exactly.
-2. This is an iterative research process. Never suggest "wrapping up" or "this
-   won't work" until several passes with different strategy pools have run.
-3. When returning to a previous experiment range, always use the LARGEST
-   current strategy pool.
-4. Record every iteration in memory/experiments/<range>/<version>/.
-5. Log significant decisions and insights in memory/decisions-log.md.
-6. Before context compaction or session end: update INDEX.md and
-   memory/current-experiment.md.
+3. This is an iterative process. Never suggest "wrapping up" or "this won't
+   work" until several runs with different inputs have been tried.
+4. When re-running a task, always use the LARGEST current input pool
+   (see memory/pool/).
+5. Record every run of a recurring task in memory/tasks/<task>/<run>/.
+   One-off work does NOT need a memory entry — the session log covers it.
+6. Log significant decisions and insights in memory/decisions-log.md.
+7. Read only the active run's folder; for other runs use the summaries in
+   memory/results/ instead of raw outputs.
+8. Before context compaction or session end: update INDEX.md and
+   memory/current-task.md.
 """
 
 VALIDATION_TEMPLATE = """\
-# VALIDATION PROTOCOL (MANDATORY FOR EVERY EXPERIMENT)
+# VALIDATION PROTOCOL (MANDATORY FOR EVERY RUN)
 
-> Sacred file. Never violate, never lose. Fill in your real steps below.
+> Sacred file. Never violate, never lose. Fill in the real steps every run
+> of a recurring task must follow — preparation, checks, acceptance and
+> rejection criteria.
 
-## 1. Data Preparation
+## 1. Preparation
 - ...
 
-## 2. IS / OOS / Forward Split
+## 2. Execution rules
 - ...
 
-## 3. Metrics (mandatory set)
+## 3. Metrics / checks (mandatory set)
 - ...
 
-## 4. Risk & Portfolio Rules
+## 4. Constraints
 - ...
 
-## 5. Rejection Criteria
+## 5. Rejection criteria
 - ...
 
 **Last updated:** {date}
 **Status:** ACTIVE
 """
 
-CURRENT_EXPERIMENT_TEMPLATE = """\
-# Current experiment
+CURRENT_TASK_TEMPLATE = """\
+# Current task
 
-**Started:** (not started)
-**Range:** (none)
-**Pool:** (none)
-**Spec:** (link to memory/experiments/<range>/<version>/task-spec.md)
+**Task:** (none active)
+**Run:** (none)
+**Spec:** (link to memory/tasks/<task>/<run>/task-spec.md)
 
 ## Status
-- (nothing active — start one with `/ccb-memory experiment <range> <version>`)
+- (nothing active — start one with `/ccb-memory task <name> <run>`)
 
 ## Next steps
 - ...
@@ -120,21 +129,22 @@ DECISIONS_TEMPLATE = """\
 - memory structure initialized
 """
 
-ALL_STRATEGIES_TEMPLATE = """\
-# Strategy pool — all strategies
+POOL_TEMPLATE = """\
+# Pool — reusable inputs for recurring tasks
 
-> Master list. Versioned snapshots live next to this file as pool-vN-<size>.md.
-> When the pool grows, create a new pool-vN file and update INDEX.md.
+> Whatever your tasks draw from: strategies, datasets, prompts, configs,
+> test corpora. Versioned snapshots live next to this file (pool-v1.md,
+> pool-v2.md, ...); when the pool grows, add a snapshot and update INDEX.md.
 
 (empty)
 """
 
 TASK_SPEC_TEMPLATE = """\
-# Task: {range_name} — {version}
+# Task: {task_name} — run {run_id}
 
 **Started:** {date}
-**Pool used:** (fill in, e.g. pool-v3-500)
-**Previous versions:** {previous}
+**Inputs / pool version:** (fill in)
+**Previous runs:** {previous}
 
 **Goal:**
 ...
@@ -142,7 +152,7 @@ TASK_SPEC_TEMPLATE = """\
 **What's different in this run:**
 - ...
 
-**Validation Protocol Compliance:** (fill in after the run)
+**Protocol compliance:** (fill in after the run)
 """
 
 # path (relative to project root) → template. Created only if missing.
@@ -150,42 +160,66 @@ SCAFFOLD_FILES: dict[str, str] = {
     "INDEX.md": INDEX_TEMPLATE,
     "AGENTS.md": AGENTS_TEMPLATE,
     "memory/validation-protocol.md": VALIDATION_TEMPLATE,
-    "memory/current-experiment.md": CURRENT_EXPERIMENT_TEMPLATE,
+    "memory/current-task.md": CURRENT_TASK_TEMPLATE,
     "memory/decisions-log.md": DECISIONS_TEMPLATE,
-    "memory/strategy-pool/all-strategies.md": ALL_STRATEGIES_TEMPLATE,
+    "memory/pool/catalog.md": POOL_TEMPLATE,
 }
 
 SCAFFOLD_DIRS: tuple[str, ...] = (
-    "memory/experiments",
+    "memory/tasks",
     "memory/results",
-    "memory/research-rag",
+    "memory/research",
 )
+
+# Pre-0.8 scaffolds used research-domain names. Recognized everywhere so an
+# existing layout keeps working; new scaffolds use the generic names only.
+LEGACY_EQUIVALENTS: dict[str, str] = {
+    "memory/current-task.md": "memory/current-experiment.md",
+    "memory/pool/catalog.md": "memory/strategy-pool/all-strategies.md",
+    "memory/tasks": "memory/experiments",
+    "memory/research": "memory/research-rag",
+}
 
 # Files whose presence defines "memory structure is initialized" for
 # status reporting (here and in status.py / session_start.py).
 KEY_FILES: tuple[str, ...] = (
     "INDEX.md",
     "memory/validation-protocol.md",
-    "memory/current-experiment.md",
+    "memory/current-task.md",
     "memory/decisions-log.md",
 )
+
+
+def _present(root: Path, rel: str) -> bool:
+    """True if `rel` or its pre-0.8 legacy equivalent exists."""
+    if (root / rel).exists():
+        return True
+    legacy = LEGACY_EQUIVALENTS.get(rel)
+    return bool(legacy and (root / legacy).exists())
+
+
+def tasks_dir(root: Path) -> Path:
+    """The runs directory — memory/tasks/, or the legacy memory/experiments/."""
+    new = root / "memory" / "tasks"
+    legacy = root / "memory" / "experiments"
+    return legacy if (not new.exists() and legacy.exists()) else new
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="ccb memory structure")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init")
-    p_exp = sub.add_parser("experiment")
-    p_exp.add_argument("range_name")
-    p_exp.add_argument("version")
+    p_task = sub.add_parser("task", aliases=["experiment"])
+    p_task.add_argument("task_name")
+    p_task.add_argument("run_id")
     sub.add_parser("status")
     args = parser.parse_args()
 
     root = project_root()
     if args.cmd == "init":
         return cmd_init(root)
-    if args.cmd == "experiment":
-        return cmd_experiment(root, args.range_name, args.version)
+    if args.cmd in ("task", "experiment"):
+        return cmd_task(root, args.task_name, args.run_id)
     return cmd_status(root)
 
 
@@ -194,19 +228,20 @@ def cmd_init(root: Path) -> int:
     date = now_iso()[:10]
     created, skipped = [], []
     for rel, template in SCAFFOLD_FILES.items():
-        p = root / rel
-        if p.exists():
+        if _present(root, rel):
             skipped.append(rel)
             continue
+        p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(template.format(date=date), encoding="utf-8")
         created.append(rel)
     for rel in SCAFFOLD_DIRS:
+        if _present(root, rel):
+            continue
         d = root / rel
-        if not d.exists():
-            d.mkdir(parents=True, exist_ok=True)
-            (d / ".gitkeep").write_text("", encoding="utf-8")
-            created.append(rel + "/")
+        d.mkdir(parents=True, exist_ok=True)
+        (d / ".gitkeep").write_text("", encoding="utf-8")
+        created.append(rel + "/")
     for rel in created:
         print(f"  created  {rel}")
     for rel in skipped:
@@ -216,29 +251,29 @@ def cmd_init(root: Path) -> int:
     return 0
 
 
-def cmd_experiment(root: Path, range_name: str, version: str) -> int:
-    for name in (range_name, version):
+def cmd_task(root: Path, task_name: str, run_id: str) -> int:
+    for name in (task_name, run_id):
         if not name or "/" in name or "\\" in name or name.startswith("."):
             print(f"invalid name: {name!r} (no path separators, no leading dot)",
                   file=sys.stderr)
             return 2
 
-    range_dir = root / "memory" / "experiments" / range_name
-    target = range_dir / version
+    task_dir = tasks_dir(root) / task_name
+    target = task_dir / run_id
     spec = target / "task-spec.md"
     if spec.exists():
         print(f"already exists: {spec.relative_to(root)}", file=sys.stderr)
         return 1
 
     previous = sorted(
-        d.name for d in safe_iterdir(range_dir) if d.is_dir() and d.name != version
-    ) if range_dir.is_dir() else []
+        d.name for d in safe_iterdir(task_dir) if d.is_dir() and d.name != run_id
+    ) if task_dir.is_dir() else []
 
     target.mkdir(parents=True, exist_ok=True)
     spec.write_text(
         TASK_SPEC_TEMPLATE.format(
-            range_name=range_name,
-            version=version,
+            task_name=task_name,
+            run_id=run_id,
             date=now_iso()[:10],
             previous=", ".join(previous) if previous else "(none)",
         ),
@@ -246,24 +281,21 @@ def cmd_experiment(root: Path, range_name: str, version: str) -> int:
     )
     print(f"created {spec.relative_to(root)}")
     if previous:
-        print(f"  previous versions in {range_name}: {', '.join(previous)}")
-    print("  next: fill in the pool + goal, and update memory/current-experiment.md + INDEX.md")
+        print(f"  previous runs of {task_name}: {', '.join(previous)}")
+    print("  next: fill in the inputs + goal, and update memory/current-task.md + INDEX.md")
     return 0
 
 
 def cmd_status(root: Path) -> int:
     print(f"ccb memory status: {root}")
     for rel in (*SCAFFOLD_FILES, *SCAFFOLD_DIRS):
-        p = root / rel
-        state = "present" if p.exists() else "MISSING"
+        state = "present" if _present(root, rel) else "MISSING"
         print(f"  {rel:<40} {state}")
-    exp_root = root / "memory" / "experiments"
-    ranges = [d for d in safe_iterdir(exp_root) if d.is_dir()] if exp_root.is_dir() else []
-    total_iters = sum(
-        1 for r in ranges for v in safe_iterdir(r) if v.is_dir()
-    )
-    print(f"  experiment ranges: {len(ranges)}, iterations: {total_iters}")
-    missing = [rel for rel in KEY_FILES if not (root / rel).exists()]
+    troot = tasks_dir(root)
+    tasks = [d for d in safe_iterdir(troot) if d.is_dir()] if troot.is_dir() else []
+    total_runs = sum(1 for t in tasks for r in safe_iterdir(t) if r.is_dir())
+    print(f"  tasks: {len(tasks)}, runs: {total_runs}")
+    missing = [rel for rel in KEY_FILES if not _present(root, rel)]
     if missing:
         print(f"  hint: run `memory.py init` to create: {', '.join(missing)}")
     return 0

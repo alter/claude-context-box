@@ -26,9 +26,12 @@ UPDATE_TIMEOUT_SECONDS = 30
 
 # Memory-structure files (scaffolded by /ccb-memory init). Injected in this
 # order — INDEX.md is the declared entry point, so it goes first.
+# current-experiment.md is the pre-0.8 name of current-task.md; a project
+# has one or the other, never both from a ccb scaffold.
 MEMORY_FILES = (
     "INDEX.md",
     "memory/validation-protocol.md",
+    "memory/current-task.md",
     "memory/current-experiment.md",
 )
 MEMORY_FILE_MAX_CHARS = 8000

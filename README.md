@@ -29,8 +29,9 @@ PROJECT.llm + CONTEXT.llm population. The `status` call confirms it landed.
 Two optional follow-ups:
 
 ```bash
-.claude/bin/ccb memory init   # iterative-research memory: INDEX.md, validation
-                              # protocol, experiment folders (see "Memory structure").
+.claude/bin/ccb memory init   # memory for recurring tasks + large projects:
+                              # INDEX.md, validation protocol, per-run folders
+                              # (see "Memory structure").
                               # Or opt in at install time: CCB_MEMORY=1 curl ... | python3 -
 .claude/bin/ccb update        # manual context refresh — only needed after mass
                               # changes made OUTSIDE Claude Code (git pull, codegen);
@@ -114,7 +115,7 @@ The installer registers seven native skills. Type `/` in Claude Code to see them
 | `/ccb-cleancode` | Heuristic dead-code candidates (reports only — never deletes) |
 | `/ccb-deps` | Prints the `@dependency_graph` section of PROJECT.llm |
 | `/ccb-wiki` | Compile or query the daily-log wiki (requires LLM extra) |
-| `/ccb-memory` | Scaffold/manage the memory/ structure for iterative research projects |
+| `/ccb-memory` | Scaffold/manage the memory/ structure for recurring tasks and large projects |
 
 ---
 
@@ -134,8 +135,8 @@ exec $SHELL
 | `ccb update` | CI/CD step (`make refresh-context` before release), after `git pull`, after a mass refactor done in another tool |
 | `ccb wiki compile [--since 7d] [--dry-run]` | Build the topic wiki from daily logs |
 | `ccb wiki query "<question>"` | Answer a question from the wiki without opening Claude Code |
-| `ccb memory init` | Scaffold INDEX.md + memory/ for iterative research projects (see Optional features) |
-| `ccb memory experiment <range> <version>` | Start a new experiment iteration folder with task-spec.md |
+| `ccb memory init` | Scaffold INDEX.md + memory/ for recurring tasks and large projects (see Optional features) |
+| `ccb memory task <name> <run>` | Start a new run of a recurring task (`experiment` works as an alias) |
 | `ccb memory status` | Report which memory files exist |
 | `ccb install --force` | Idempotent reinstall of the asset bundle (replaces ccb-owned hooks; user-defined hooks survive) |
 | `ccb uninstall` | Strip the ccb block from CLAUDE.md (keeps `.claude/` so you can reinstall later) |
@@ -203,55 +204,62 @@ Output:
 - `.ccb/wiki/topics/<slug>.md` — one article per concept (summary,
   decisions, open issues, modules touched, related topics, source-log refs)
 
-### Memory structure for iterative research projects
+### Memory structure for recurring tasks and large projects
 
-For projects where you return to the same experiments again and again
-(backtest ranges, strategy pools, model sweeps), ccb can scaffold a
-memory layout that survives context compaction and session boundaries:
+Two kinds of work exist. One-off tasks ("did it, forgot it") are already
+covered by ccb's automatic daily log + wiki — they need no manual structure.
+This layout is for the other kind: **recurring tasks** you re-run again and
+again with new variants, options, or data (backtest ranges, model sweeps,
+nightly imports, benchmark suites), and **large projects** where the whole
+tree must not be held in context — INDEX.md acts as a routing table instead.
 
 ```
 your-project/
-├── INDEX.md                        # entry point — Claude reads it first, every session
+├── INDEX.md                        # entry point + routing table — Claude reads it first
 ├── AGENTS.md                       # critical rules for any coding agent
 └── memory/
     ├── validation-protocol.md      # sacred file — read before every run, never violate
-    ├── current-experiment.md       # the active iteration
+    ├── current-task.md             # the active task/run
     ├── decisions-log.md            # dated decisions and insights
-    ├── strategy-pool/              # master list + versioned pool snapshots
-    ├── experiments/<range>/<version>/task-spec.md
-    ├── results/                    # comparisons, best performers
-    └── research-rag/               # new theories and strategies
+    ├── pool/                       # reusable inputs recurring tasks draw from:
+    │                               #   strategies, datasets, prompts, configs
+    ├── tasks/<task>/<run>/task-spec.md
+    ├── results/                    # cross-run comparisons, best performers
+    └── research/                   # new theories, approaches, reference notes
 ```
 
 ```bash
-.claude/bin/ccb memory init                          # scaffold (never overwrites)
-.claude/bin/ccb memory experiment books-25 v3-500    # new iteration + task-spec.md
-.claude/bin/ccb memory status                        # what exists, what's missing
+.claude/bin/ccb memory init                       # scaffold (never overwrites)
+.claude/bin/ccb memory task books-25 v3-500       # new run + task-spec.md
+.claude/bin/ccb memory status                     # what exists, what's missing
 ```
 
-Or type `/ccb-memory` inside Claude Code.
+Or type `/ccb-memory` inside Claude Code. (`ccb memory experiment` is kept as
+an alias of `task`; pre-0.8 scaffolds with `experiments/`, `strategy-pool/`
+and `current-experiment.md` keep working — all tools recognize both layouts.)
 
 Once `INDEX.md` and `memory/` exist:
 
 - **SessionStart injects them.** `INDEX.md`, `memory/validation-protocol.md`,
-  and `memory/current-experiment.md` go into the system prompt alongside
+  and `memory/current-task.md` go into the system prompt alongside
   PROJECT.llm (each capped at 8 KB) — Claude opens every session knowing the
-  active experiment and the protocol it must follow.
-- **The CLAUDE.md block enforces the workflow.** Read INDEX.md first, follow
-  the validation protocol exactly, record every iteration under
-  `memory/experiments/<range>/<version>/`, use the largest current pool when
-  revisiting a range, and update `INDEX.md` + `current-experiment.md` before
-  any compaction or session end.
-- **`ccb memory experiment`** creates the iteration folder, pre-fills
-  `task-spec.md`, and lists the previous versions of that range so the run
-  builds on what came before.
+  active task and the protocol it must follow.
+- **The CLAUDE.md block enforces the workflow.** Read INDEX.md first and only
+  what it points to; follow the validation protocol exactly; record every run
+  of a recurring task under `memory/tasks/<task>/<run>/` (one-off work stays
+  out — the session log covers it); use the largest current pool when
+  re-running; read other runs via `results/` summaries, not raw outputs; and
+  update `INDEX.md` + `current-task.md` before any compaction or session end.
+- **`ccb memory task`** creates the run folder, pre-fills `task-spec.md`, and
+  lists the previous runs of that task so the new run builds on what came
+  before.
 - **INDEX.md facts stay fresh automatically.** Every engine update (install,
   stale-context SessionStart, `/ccb-update`, the SessionEnd background worker)
   rewrites the `<!-- ccb:index:begin/end -->` block inside INDEX.md with
-  filesystem facts: experiment ranges with iteration counts, the most recently
-  active iteration, strategy pools, the latest session log. Everything outside
-  the markers — insights, best results — is yours and is never touched; those
-  the agent updates per the CLAUDE.md rules.
+  filesystem facts: tasks with run counts, the most recently active run,
+  pool files, the latest session log. Everything outside the markers —
+  insights, best results — is yours and is never touched; those the agent
+  updates per the CLAUDE.md rules.
 
 Everything under `memory/` is plain Markdown you own and commit — ccb never
 overwrites an existing file there.

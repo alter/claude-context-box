@@ -146,21 +146,27 @@ def _check_context_coverage(root: Path) -> str:
 
 
 def _check_memory(root: Path) -> str:
-    """Health of the memory/ research structure (scaffolded by /ccb-memory init)."""
+    """Health of the memory/ structure (scaffolded by /ccb-memory init).
+
+    Key files accept alternates: current-task.md is the 0.8+ name of the
+    pre-0.8 current-experiment.md, and tasks/ of experiments/.
+    """
     key = (
-        "INDEX.md",
-        "memory/validation-protocol.md",
-        "memory/current-experiment.md",
-        "memory/decisions-log.md",
+        ("INDEX.md",),
+        ("memory/validation-protocol.md",),
+        ("memory/current-task.md", "memory/current-experiment.md"),
+        ("memory/decisions-log.md",),
     )
-    present = [k for k in key if (root / k).exists()]
+    present = [alts[0] for alts in key if any((root / a).exists() for a in alts)]
     if not present:
         return "not initialized (optional — /ccb-memory init)"
-    exp_root = root / "memory" / "experiments"
-    ranges = [d for d in safe_iterdir(exp_root) if d.is_dir()] if exp_root.is_dir() else []
-    iters = sum(1 for r in ranges for v in safe_iterdir(r) if v.is_dir())
-    report = f"{len(present)}/{len(key)} key files, {len(ranges)} range(s), {iters} iteration(s)"
-    missing = [k for k in key if k not in present]
+    troot = root / "memory" / "tasks"
+    if not troot.is_dir():
+        troot = root / "memory" / "experiments"
+    tasks = [d for d in safe_iterdir(troot) if d.is_dir()] if troot.is_dir() else []
+    runs = sum(1 for t in tasks for r in safe_iterdir(t) if r.is_dir())
+    report = f"{len(present)}/{len(key)} key files, {len(tasks)} task(s), {runs} run(s)"
+    missing = [alts[0] for alts in key if not any((root / a).exists() for a in alts)]
     if missing:
         report += f"; missing: {', '.join(missing)}"
     return report

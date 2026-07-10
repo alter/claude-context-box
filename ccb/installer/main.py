@@ -250,16 +250,17 @@ def wiki(subcmd: str, args) -> int:
 
 
 def memory(subcmd: str, args) -> int:
-    """`ccb memory init|experiment|status` — proxies to engine/memory.py."""
+    """`ccb memory init|task|status` — proxies to engine/memory.py."""
     target = Path.cwd().resolve()
     if is_ccb_source_repo(target):
         print(f"this is the ccb source repo, not a target install: {target}")
         return 0
 
     script = target / ".claude" / "ccb-engine" / "memory.py"
-    extra: list[str] = [subcmd]
-    if subcmd == "experiment":
-        extra += [args.range_name, args.version]
+    if subcmd in ("task", "experiment"):
+        extra = ["task", args.task_name, args.run_id]
+    else:
+        extra = [subcmd]
     return _run_engine_script(target, script, extra)
 
 

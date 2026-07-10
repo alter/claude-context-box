@@ -112,15 +112,26 @@ def test_memory_init_dispatches() -> None:
     assert args[0] == "init"
 
 
-def test_memory_experiment_dispatches() -> None:
+def test_memory_task_dispatches() -> None:
     with patch("ccb.installer.main.memory", return_value=0) as mock:
-        rc = main(["memory", "experiment", "books-25", "v3-500-strats"])
+        rc = main(["memory", "task", "books-25", "v3-500-strats"])
+    assert rc == 0
+    args, _ = mock.call_args
+    assert args[0] == "task"
+    parsed = args[1]
+    assert parsed.task_name == "books-25"
+    assert parsed.run_id == "v3-500-strats"
+
+
+def test_memory_experiment_alias_dispatches() -> None:
+    with patch("ccb.installer.main.memory", return_value=0) as mock:
+        rc = main(["memory", "experiment", "books-25", "v1"])
     assert rc == 0
     args, _ = mock.call_args
     assert args[0] == "experiment"
     parsed = args[1]
-    assert parsed.range_name == "books-25"
-    assert parsed.version == "v3-500-strats"
+    assert parsed.task_name == "books-25"
+    assert parsed.run_id == "v1"
 
 
 def test_memory_status_dispatches() -> None:
