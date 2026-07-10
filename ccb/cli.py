@@ -27,6 +27,19 @@ def main(argv: list[str] | None = None) -> int:
     p_wq = wiki_sub.add_parser("query", help="Answer a question from the compiled wiki")
     p_wq.add_argument("question", nargs="+", help="The question to ask")
 
+    p_mem = sub.add_parser(
+        "memory",
+        help="Scaffold/manage the memory/ structure for iterative research projects",
+    )
+    mem_sub = p_mem.add_subparsers(dest="memory_cmd", required=True)
+    mem_sub.add_parser(
+        "init", help="Create INDEX.md, AGENTS.md and memory/ skeleton (never overwrites)"
+    )
+    p_me = mem_sub.add_parser("experiment", help="Start a new experiment iteration folder")
+    p_me.add_argument("range_name", help="Experiment range, e.g. books-25")
+    p_me.add_argument("version", help="Iteration id, e.g. v3-500-strats")
+    mem_sub.add_parser("status", help="Report which memory files exist")
+
     p_gh = sub.add_parser(
         "install-git-hook",
         help="Install optional pre-commit hook that refreshes contexts on each commit",
@@ -58,6 +71,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "wiki":
         from ccb.installer.main import wiki
         return wiki(args.wiki_cmd, args)
+    if args.cmd == "memory":
+        from ccb.installer.main import memory
+        return memory(args.memory_cmd, args)
     if args.cmd == "install-git-hook":
         from ccb.installer.git_hook import install as install_git_hook
         from pathlib import Path as _P

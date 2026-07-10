@@ -244,3 +244,73 @@ def test_status_refuses_in_source_repo(tmp_path: Path, monkeypatch, capsys) -> N
     rc = installer_main.status()
     assert rc == 0
     assert "ccb source repo" in capsys.readouterr().out
+
+
+# _run_engine_update timeout handling -------------------------------------
+
+
+def test_run_engine_update_survives_timeout(tmp_path: Path, capsys) -> None:
+    """A timed-out initial update must be non-fatal — the install already
+    succeeded (regression: TimeoutExpired escaped and killed the installer
+    on slow filesystems like WSL /mnt/c)."""
+    import subprocess
+    from unittest.mock import patch
+
+    script = tmp_path / ".claude" / "ccb-engine" / "update.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("pass\n")
+
+    def _raise_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="update.py", timeout=120)
+
+    with patch.object(installer_main.subprocess, "run", side_effect=_raise_timeout):
+        rc = installer_main._run_engine_update(tmp_path)
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "timed out" in err
+    assert "CCB_UPDATE_TIMEOUT" in err
+
+
+def test_update_timeout_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("CCB_UPDATE_TIMEOUT", "600")
+    assert installer_main._update_timeout() == 600
+
+
+def test_update_timeout_rejects_garbage(monkeypatch) -> None:
+    monkeypatch.setenv("CCB_UPDATE_TIMEOUT", "not-a-number")
+    assert installer_main._update_timeout() == installer_main.DEFAULT_UPDATE_TIMEOUT
+    monkeypatch.setenv("CCB_UPDATE_TIMEOUT", "-5")
+    assert installer_main._update_timeout() == installer_main.DEFAULT_UPDATE_TIMEOUT
+
+
+# memory dispatch ----------------------------------------------------------
+
+
+def test_memory_proxies_to_engine_script(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    captured: dict = {}
+
+    def fake_run_engine_script(target, script, args):
+        captured["script"] = script.name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr(installer_main, "_run_engine_script", fake_run_engine_script)
+
+    class Args:
+        range_name = "books-25"
+        version = "v3-500"
+
+    rc = installer_main.memory("experiment", Args())
+    assert rc == 0
+    assert captured["script"] == "memory.py"
+    assert captured["args"] == ["experiment", "books-25", "v3-500"]
+
+
+def test_memory_refuses_in_source_repo(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "ccb" / "assets" / "claude_md").mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text('name = "claude-context-box"\n')
+    monkeypatch.chdir(tmp_path)
+    rc = installer_main.memory("init", None)
+    assert rc == 0
+    assert "ccb source repo" in capsys.readouterr().out

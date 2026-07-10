@@ -5,7 +5,7 @@ One curl command installs hooks and skills that keep `PROJECT.llm` and per-modul
 `CONTEXT.llm` files in sync with your code, so Claude always knows the project
 architecture without re-scanning it on every session.
 
-> **Status: 0.3.0 released.** The previous shortcut-based line (`u` / `update`
+> **Status: 0.3.0 and later.** The previous shortcut-based line (`u` / `update`
 > / `c` / `s` parsed out of CLAUDE.md) has been replaced with native Claude
 > Code primitives — Skills, Hooks, and additive CLAUDE.md merging. Old
 > releases are not compatible with this branch.
@@ -25,6 +25,13 @@ curl -sSL https://raw.githubusercontent.com/alter/claude-context-box/main/instal
 That's it. Three lines, no further setup required. The first command does
 everything — venv, hooks, skills, engine, CLAUDE.md merge, initial
 PROJECT.llm + CONTEXT.llm population. The `status` call confirms it landed.
+
+**Requires Python ≥ 3.10** — the interpreter you pipe the installer into.
+ccb lives in its own isolated venv (`.claude/ccb-venv/`, created from that
+interpreter), so your project's existing `.venv` is never touched and its
+Python version doesn't matter. If the system `python3` is too old (or an old
+project venv is activated), point the pipe at a newer one:
+`curl -sSL ... | python3.11 -`.
 
 Now open Claude Code in this project. The next section walks through what
 happens.
@@ -82,7 +89,7 @@ In normal work: install once, open Claude Code, forget ccb exists.
 
 ## Slash commands inside Claude Code
 
-The installer registers six native skills. Type `/` in Claude Code to see them:
+The installer registers seven native skills. Type `/` in Claude Code to see them:
 
 | Skill | What it does |
 |---|---|
@@ -92,6 +99,7 @@ The installer registers six native skills. Type `/` in Claude Code to see them:
 | `/ccb-cleancode` | Heuristic dead-code candidates (reports only — never deletes) |
 | `/ccb-deps` | Prints the `@dependency_graph` section of PROJECT.llm |
 | `/ccb-wiki` | Compile or query the daily-log wiki (requires LLM extra) |
+| `/ccb-memory` | Scaffold/manage the memory/ structure for iterative research projects |
 
 ---
 
@@ -111,6 +119,9 @@ exec $SHELL
 | `ccb update` | CI/CD step (`make refresh-context` before release), after `git pull`, after a mass refactor done in another tool |
 | `ccb wiki compile [--since 7d] [--dry-run]` | Build the topic wiki from daily logs |
 | `ccb wiki query "<question>"` | Answer a question from the wiki without opening Claude Code |
+| `ccb memory init` | Scaffold INDEX.md + memory/ for iterative research projects (see Optional features) |
+| `ccb memory experiment <range> <version>` | Start a new experiment iteration folder with task-spec.md |
+| `ccb memory status` | Report which memory files exist |
 | `ccb install --force` | Idempotent reinstall of the asset bundle (replaces ccb-owned hooks; user-defined hooks survive) |
 | `ccb uninstall` | Strip the ccb block from CLAUDE.md (keeps `.claude/` so you can reinstall later) |
 
@@ -176,6 +187,59 @@ Output:
 - `.ccb/wiki/index.md` — topic index with intro and cross-links
 - `.ccb/wiki/topics/<slug>.md` — one article per concept (summary,
   decisions, open issues, modules touched, related topics, source-log refs)
+
+### Memory structure for iterative research projects
+
+For projects where you return to the same experiments again and again
+(backtest ranges, strategy pools, model sweeps), ccb can scaffold a
+memory layout that survives context compaction and session boundaries:
+
+```
+your-project/
+├── INDEX.md                        # entry point — Claude reads it first, every session
+├── AGENTS.md                       # critical rules for any coding agent
+└── memory/
+    ├── validation-protocol.md      # sacred file — read before every run, never violate
+    ├── current-experiment.md       # the active iteration
+    ├── decisions-log.md            # dated decisions and insights
+    ├── strategy-pool/              # master list + versioned pool snapshots
+    ├── experiments/<range>/<version>/task-spec.md
+    ├── results/                    # comparisons, best performers
+    └── research-rag/               # new theories and strategies
+```
+
+```bash
+.claude/bin/ccb memory init                          # scaffold (never overwrites)
+.claude/bin/ccb memory experiment books-25 v3-500    # new iteration + task-spec.md
+.claude/bin/ccb memory status                        # what exists, what's missing
+```
+
+Or type `/ccb-memory` inside Claude Code.
+
+Once `INDEX.md` and `memory/` exist:
+
+- **SessionStart injects them.** `INDEX.md`, `memory/validation-protocol.md`,
+  and `memory/current-experiment.md` go into the system prompt alongside
+  PROJECT.llm (each capped at 8 KB) — Claude opens every session knowing the
+  active experiment and the protocol it must follow.
+- **The CLAUDE.md block enforces the workflow.** Read INDEX.md first, follow
+  the validation protocol exactly, record every iteration under
+  `memory/experiments/<range>/<version>/`, use the largest current pool when
+  revisiting a range, and update `INDEX.md` + `current-experiment.md` before
+  any compaction or session end.
+- **`ccb memory experiment`** creates the iteration folder, pre-fills
+  `task-spec.md`, and lists the previous versions of that range so the run
+  builds on what came before.
+- **INDEX.md facts stay fresh automatically.** Every engine update (install,
+  stale-context SessionStart, `/ccb-update`, the SessionEnd background worker)
+  rewrites the `<!-- ccb:index:begin/end -->` block inside INDEX.md with
+  filesystem facts: experiment ranges with iteration counts, the most recently
+  active iteration, strategy pools, the latest session log. Everything outside
+  the markers — insights, best results — is yours and is never touched; those
+  the agent updates per the CLAUDE.md rules.
+
+Everything under `memory/` is plain Markdown you own and commit — ccb never
+overwrites an existing file there.
 
 ### Pre-commit hook (only if you commit context files)
 
@@ -274,6 +338,7 @@ Opt out of the synchronous SessionStart refresh on huge repos:
 | `CCB_REPO_URL` | `https://github.com/alter/claude-context-box.git` | Alternate source (forks, mirrors) |
 | `CCB_TARBALL_URL` | `https://codeload.github.com/alter/claude-context-box/tar.gz/refs/heads` | Tarball fallback if git unavailable |
 | `CCB_DISABLE_AUTO_UPDATE` | `0` | Skip the synchronous SessionStart refresh |
+| `CCB_UPDATE_TIMEOUT` | `120` | Seconds before the initial engine update is abandoned (non-fatal). Raise on slow filesystems — WSL `/mnt/c`, NFS, huge monorepos |
 | `ANTHROPIC_API_KEY` | unset | Required for opt-in LLM features (Phase F + wiki) |
 
 ### What `install.py` does, step by step

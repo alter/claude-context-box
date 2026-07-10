@@ -86,6 +86,23 @@ def install(target_dir: str = ".", force: bool = False) -> int:
     return 0
 
 
+DEFAULT_UPDATE_TIMEOUT = 120
+
+
+def _update_timeout() -> int:
+    """Seconds before the initial engine update is abandoned (non-fatal).
+
+    Slow filesystems (WSL /mnt/c, NFS, huge monorepos) can blow past the
+    default — raise via CCB_UPDATE_TIMEOUT.
+    """
+    raw = os.environ.get("CCB_UPDATE_TIMEOUT", "")
+    try:
+        value = int(raw)
+        return value if value > 0 else DEFAULT_UPDATE_TIMEOUT
+    except ValueError:
+        return DEFAULT_UPDATE_TIMEOUT
+
+
 def _run_engine_update(target: Path) -> int:
     """Invoke .claude/ccb-engine/update.py against the target.
 
@@ -101,14 +118,25 @@ def _run_engine_update(target: Path) -> int:
     )
     python_cmd = str(venv_python) if venv_python.exists() else sys.executable
 
-    proc = subprocess.run(
-        [python_cmd, str(update_script)],
-        cwd=str(target),
-        env={**os.environ, "CLAUDE_PROJECT_DIR": str(target)},
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    timeout = _update_timeout()
+    try:
+        proc = subprocess.run(
+            [python_cmd, str(update_script)],
+            cwd=str(target),
+            env={**os.environ, "CLAUDE_PROJECT_DIR": str(target)},
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        sys.stderr.write(
+            f"ccb engine update timed out after {timeout}s (non-fatal).\n"
+            "The install itself succeeded. Populate contexts later with\n"
+            "  .claude/bin/ccb update\n"
+            "or raise the limit: CCB_UPDATE_TIMEOUT=600 (slow filesystems\n"
+            "like WSL /mnt/c often need it).\n"
+        )
+        return 1
     if proc.returncode != 0:
         sys.stderr.write(
             f"ccb engine update failed (non-fatal):\n{proc.stderr}\n"
@@ -212,6 +240,20 @@ def wiki(subcmd: str, args) -> int:
         return _run_engine_script(target, script, [question])
     print(f"unknown wiki subcommand: {subcmd}", file=sys.stderr)
     return 2
+
+
+def memory(subcmd: str, args) -> int:
+    """`ccb memory init|experiment|status` — proxies to engine/memory.py."""
+    target = Path.cwd().resolve()
+    if is_ccb_source_repo(target):
+        print(f"this is the ccb source repo, not a target install: {target}")
+        return 0
+
+    script = target / ".claude" / "ccb-engine" / "memory.py"
+    extra: list[str] = [subcmd]
+    if subcmd == "experiment":
+        extra += [args.range_name, args.version]
+    return _run_engine_script(target, script, extra)
 
 
 def _run_engine_script(target: Path, script: Path, args: list[str]) -> int:

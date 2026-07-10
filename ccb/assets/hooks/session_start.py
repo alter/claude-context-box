@@ -24,6 +24,15 @@ from _lib import ccb_dir, project_root, read_input, safe_main, write_output  # n
 
 UPDATE_TIMEOUT_SECONDS = 30
 
+# Memory-structure files (scaffolded by /ccb-memory init). Injected in this
+# order — INDEX.md is the declared entry point, so it goes first.
+MEMORY_FILES = (
+    "INDEX.md",
+    "memory/validation-protocol.md",
+    "memory/current-experiment.md",
+)
+MEMORY_FILE_MAX_CHARS = 8000
+
 
 def run() -> None:
     read_input()
@@ -32,6 +41,20 @@ def run() -> None:
     _refresh_if_stale(root)
 
     parts: list[str] = []
+
+    for rel in MEMORY_FILES:
+        p = root / rel
+        if not p.is_file():
+            continue
+        try:
+            text = p.read_text(encoding="utf-8", errors="ignore").strip()
+        except OSError:
+            continue
+        if not text:
+            continue
+        if len(text) > MEMORY_FILE_MAX_CHARS:
+            text = text[:MEMORY_FILE_MAX_CHARS] + "\n…(truncated — Read the file for the rest)"
+        parts.append(f"### {rel}\n\n{text}")
 
     project_llm = root / "PROJECT.llm"
     if project_llm.exists():

@@ -57,6 +57,30 @@ def test_session_start_includes_latest_daily_log(tmp_path: Path) -> None:
     assert "old log" not in ctx  # only the latest log is injected
 
 
+def test_session_start_injects_memory_files(tmp_path: Path) -> None:
+    """INDEX.md + memory files are injected, INDEX.md first (it's the entry point)."""
+    (tmp_path / "PROJECT.llm").write_text("@project: foo\n")
+    (tmp_path / "INDEX.md").write_text("# INDEX\npool: v2-300\n")
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    (mem / "validation-protocol.md").write_text("# PROTOCOL\nnever skip OOS\n")
+    (mem / "current-experiment.md").write_text("# current\nbooks-25 v3\n")
+    out = _run_hook("session_start.py", {}, tmp_path)
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "pool: v2-300" in ctx
+    assert "never skip OOS" in ctx
+    assert "books-25 v3" in ctx
+    assert ctx.index("INDEX.md") < ctx.index("PROJECT.llm")
+
+
+def test_session_start_truncates_huge_memory_file(tmp_path: Path) -> None:
+    (tmp_path / "INDEX.md").write_text("# INDEX\n" + "x" * 20000)
+    out = _run_hook("session_start.py", {}, tmp_path)
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "truncated" in ctx
+    assert len(ctx) < 20000
+
+
 # post_tool_use ----------------------------------------------------------
 
 

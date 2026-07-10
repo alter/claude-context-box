@@ -25,6 +25,7 @@ def main() -> int:
     _line(".ccb/state.json", _check_state(root))
     _line(".ccb/errors.log", _check_errors(root))
     _line("CONTEXT.llm coverage", _check_context_coverage(root))
+    _line("memory structure", _check_memory(root))
     return 0
 
 
@@ -142,6 +143,27 @@ def _check_context_coverage(root: Path) -> str:
         return "no code directories"
     pct = int(100 * with_ctx / len(code_dirs))
     return f"{with_ctx}/{len(code_dirs)} dirs ({pct}%)"
+
+
+def _check_memory(root: Path) -> str:
+    """Health of the memory/ research structure (scaffolded by /ccb-memory init)."""
+    key = (
+        "INDEX.md",
+        "memory/validation-protocol.md",
+        "memory/current-experiment.md",
+        "memory/decisions-log.md",
+    )
+    present = [k for k in key if (root / k).exists()]
+    if not present:
+        return "not initialized (optional — /ccb-memory init)"
+    exp_root = root / "memory" / "experiments"
+    ranges = [d for d in safe_iterdir(exp_root) if d.is_dir()] if exp_root.is_dir() else []
+    iters = sum(1 for r in ranges for v in safe_iterdir(r) if v.is_dir())
+    report = f"{len(present)}/{len(key)} key files, {len(ranges)} range(s), {iters} iteration(s)"
+    missing = [k for k in key if k not in present]
+    if missing:
+        report += f"; missing: {', '.join(missing)}"
+    return report
 
 
 def _human_age(seconds: int) -> str:

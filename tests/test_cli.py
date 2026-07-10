@@ -98,6 +98,33 @@ def test_wiki_query_dispatches() -> None:
     assert parsed.question == ["what", "did", "we", "decide"]
 
 
+def test_memory_init_dispatches() -> None:
+    with patch("ccb.installer.main.memory", return_value=0) as mock:
+        rc = main(["memory", "init"])
+    assert rc == 0
+    args, _ = mock.call_args
+    assert args[0] == "init"
+
+
+def test_memory_experiment_dispatches() -> None:
+    with patch("ccb.installer.main.memory", return_value=0) as mock:
+        rc = main(["memory", "experiment", "books-25", "v3-500-strats"])
+    assert rc == 0
+    args, _ = mock.call_args
+    assert args[0] == "experiment"
+    parsed = args[1]
+    assert parsed.range_name == "books-25"
+    assert parsed.version == "v3-500-strats"
+
+
+def test_memory_status_dispatches() -> None:
+    with patch("ccb.installer.main.memory", return_value=0) as mock:
+        rc = main(["memory", "status"])
+    assert rc == 0
+    args, _ = mock.call_args
+    assert args[0] == "status"
+
+
 def test_no_subcommand_returns_nonzero(capsys) -> None:
     """Calling without a subcommand should fail loudly, not silently."""
     with pytest.raises(SystemExit) as exc_info:

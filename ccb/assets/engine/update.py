@@ -9,11 +9,13 @@ Modes:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _lib import (  # noqa: E402
+    IGNORED_DIRS,
     JS_TS_SUFFIXES,
     SOURCE_SUFFIXES,
     count_source_files,
@@ -25,6 +27,7 @@ from _lib import (  # noqa: E402
     parse_exports_for_path,
     project_root,
     relative,
+    safe_iterdir,
 )
 
 
@@ -42,6 +45,7 @@ def main() -> int:
     print(f"ccb update: {root}")
 
     write_project_llm(root)
+    refresh_index_block(root)
 
     if args.paths:
         targets = _resolve_targets(args.paths, root)
@@ -173,6 +177,90 @@ def write_context_llm(directory: Path, root: Path) -> None:
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# INDEX.md auto-maintained block ------------------------------------------
+#
+# INDEX.md is human/agent-owned (see memory.py) — ccb never rewrites it
+# wholesale. The one exception is this marker-delimited block of
+# filesystem-derived FACTS: experiment ranges, iteration counts, pools,
+# latest session log. Insights and results stay outside the markers and are
+# never touched. Same ownership model as the ccb block in CLAUDE.md.
+
+INDEX_BEGIN = "<!-- ccb:index:begin -->"
+INDEX_END = "<!-- ccb:index:end -->"
+
+
+def refresh_index_block(root: Path) -> None:
+    """Refresh the auto-generated fact block inside INDEX.md, if it exists.
+
+    Never creates INDEX.md (that's `memory.py init`'s job) and never touches
+    content outside the markers. A hand-written INDEX.md without markers gets
+    the block appended at the end.
+    """
+    index = root / "INDEX.md"
+    if not index.is_file():
+        return
+    try:
+        text = index.read_text(encoding="utf-8")
+    except OSError:
+        return
+
+    block = "\n".join([INDEX_BEGIN, *_index_facts(root), INDEX_END])
+
+    begin = text.find(INDEX_BEGIN)
+    end = text.find(INDEX_END)
+    if begin != -1 and end != -1 and end >= begin:
+        new_text = text[:begin] + block + text[end + len(INDEX_END):]
+    else:
+        new_text = text.rstrip("\n") + "\n\n" + block + "\n"
+
+    if new_text != text:
+        index.write_text(new_text, encoding="utf-8")
+        print(f"  refreshed {relative(index, root)} fact block")
+
+
+def _index_facts(root: Path) -> list[str]:
+    lines = [
+        "_Auto-maintained by ccb — filesystem facts only. Edit OUTSIDE this block._",
+        "",
+        f"**Updated:** {now_iso()}",
+    ]
+
+    pool_dir = root / "memory" / "strategy-pool"
+    pools = sorted(p.name for p in safe_iterdir(pool_dir) if p.is_file() and p.suffix == ".md")
+    if pools:
+        lines.append(f"**Strategy pools:** {', '.join(pools)}")
+
+    exp_root = root / "memory" / "experiments"
+    ranges = sorted((d for d in safe_iterdir(exp_root) if d.is_dir()), key=lambda d: d.name)
+    latest_spec: tuple[float, str] | None = None
+    if ranges:
+        lines.append("**Experiment ranges:**")
+        for r in ranges:
+            iters = sorted((d for d in safe_iterdir(r) if d.is_dir()), key=lambda d: d.name)
+            newest = ""
+            for it in iters:
+                spec = it / "task-spec.md"
+                try:
+                    mtime = spec.stat().st_mtime if spec.exists() else it.stat().st_mtime
+                except OSError:
+                    continue
+                if latest_spec is None or mtime > latest_spec[0]:
+                    latest_spec = (mtime, f"{r.name}/{it.name}")
+                if not newest or mtime >= newest[0]:
+                    newest = (mtime, it.name)
+            detail = f", latest: {newest[1]}" if newest else ""
+            lines.append(f"- {r.name}: {len(iters)} iteration(s){detail}")
+    if latest_spec:
+        lines.append(f"**Most recently active:** memory/experiments/{latest_spec[1]}/")
+
+    daily_dir = root / ".ccb" / "daily_log"
+    logs = sorted(p.name for p in safe_iterdir(daily_dir) if p.suffix == ".md")
+    if logs:
+        lines.append(f"**Latest session log:** .ccb/daily_log/{logs[-1]}")
+
+    return lines
+
+
 def describe_dir(d: Path) -> str:
     """Best-effort one-line description.
 
@@ -281,13 +369,21 @@ def collect_edges(root: Path) -> dict[str, set[str]]:
 
     for src_dir in top_dirs:
         src_path = root / src_dir
-        for f in src_path.rglob("*"):
-            if not f.is_file() or f.suffix not in SOURCE_SUFFIXES:
-                continue
-            for spec in imports_for_path(f):
-                target = _resolve_import_to_top(spec, f, root, top_dirs)
-                if target and target != src_dir:
-                    edges[src_dir].add(target)
+        # Pruned walk instead of rglob("*"): nested venvs / node_modules /
+        # data dumps would otherwise be enumerated file-by-file, which is
+        # ruinously slow on WSL /mnt/c and network mounts.
+        for dirpath, dirnames, filenames in os.walk(src_path, onerror=lambda _e: None):
+            dirnames[:] = [
+                d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")
+            ]
+            for name in filenames:
+                if not name.endswith(SOURCE_SUFFIXES):
+                    continue
+                f = Path(dirpath) / name
+                for spec in imports_for_path(f):
+                    target = _resolve_import_to_top(spec, f, root, top_dirs)
+                    if target and target != src_dir:
+                        edges[src_dir].add(target)
     return {k: v for k, v in edges.items() if v}
 
 

@@ -362,6 +362,30 @@ def test_dependency_graph_resolves_nextjs_aliases(tmp_path: Path) -> None:
     assert "lib: [workers]" in project_llm
 
 
+def test_dependency_graph_ignores_nested_vendor_dirs(tmp_path: Path) -> None:
+    """Files under nested node_modules/venv must not produce edges — they are
+    third-party code, and enumerating them is what made update.py time out on
+    slow filesystems (WSL /mnt/c)."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    app = tmp_path / "app"
+    lib = tmp_path / "lib"
+    app.mkdir()
+    lib.mkdir()
+    (lib / "util.py").write_text("def helper(): ...\n")
+    (app / "clean.py").write_text("import os\n")
+    vendored = app / "node_modules" / "pkg"
+    vendored.mkdir(parents=True)
+    (vendored / "dep.py").write_text("from lib.util import helper\n")
+    nested_venv = app / "venv" / "site"
+    nested_venv.mkdir(parents=True)
+    (nested_venv / "dep2.py").write_text("from lib.util import helper\n")
+
+    _run("update.py", tmp_path)
+    project_llm = (tmp_path / "PROJECT.llm").read_text()
+    # The only imports of lib live in vendored/venv code → no app -> lib edge.
+    assert "app: [lib]" not in project_llm
+
+
 def test_jsdoc_summary_used_as_purpose(tmp_path: Path) -> None:
     """index.ts JSDoc at top of file becomes @purpose for the dir."""
     (tmp_path / "package.json").write_text('{"name":"x"}\n')
