@@ -74,3 +74,16 @@ def test_status_falls_back_when_engine_missing(tmp_path: Path, monkeypatch, caps
     assert rc == 0
     out = capsys.readouterr().out
     assert "engine not installed" in out or ".claude/" in out
+
+
+def test_install_with_memory_scaffolds_structure(tmp_path: Path) -> None:
+    rc = install(target_dir=str(tmp_path), memory=True)
+    assert rc == 0
+    assert (tmp_path / "INDEX.md").exists()
+    assert (tmp_path / "memory" / "validation-protocol.md").exists()
+
+
+def test_install_without_memory_stays_clean(tmp_path: Path) -> None:
+    install(target_dir=str(tmp_path))
+    assert not (tmp_path / "INDEX.md").exists()
+    assert not (tmp_path / "memory").exists()

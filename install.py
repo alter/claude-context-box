@@ -22,6 +22,8 @@ Environment variables:
     CCB_REPO_URL     alternate git remote (default: github.com/alter/claude-context-box)
     CCB_TARBALL_URL  alternate tarball base URL (used as fallback)
     CCB_LLM          if set to 1, also install ccb[llm] for LLM session summaries
+    CCB_MEMORY       if set to 1, also scaffold the memory/ research structure
+                     (INDEX.md, validation protocol, experiment folders)
 """
 from __future__ import annotations
 
@@ -73,7 +75,8 @@ def main() -> int:
         source_root = _fetch(ref, Path(tmp), repo_url, tarball_base)
         venv_python = _setup_venv(target_dir, force=force)
         _pip_install_ccb(venv_python, source_root)
-        rc = _run_ccb_install(venv_python, target_dir, force=force)
+        memory = os.environ.get("CCB_MEMORY", "").lower() in {"1", "true", "yes"}
+        rc = _run_ccb_install(venv_python, target_dir, force=force, memory=memory)
         if rc != 0:
             return rc
         _write_shim(target_dir, venv_python)
@@ -163,10 +166,14 @@ def _pip_install_ccb(venv_python: Path, source_root: Path) -> None:
 # ---- run ccb install --------------------------------------------------------
 
 
-def _run_ccb_install(venv_python: Path, target_dir: Path, *, force: bool) -> int:
+def _run_ccb_install(
+    venv_python: Path, target_dir: Path, *, force: bool, memory: bool = False
+) -> int:
     args = [str(venv_python), "-m", "ccb", "install", "--dir", str(target_dir)]
     if force:
         args.append("--force")
+    if memory:
+        args.append("--memory")
     return subprocess.call(args)
 
 

@@ -33,7 +33,7 @@ ENGINE_DIR = ASSETS_ROOT / "engine"
 PYTHON_PLACEHOLDER = "{{ccb_python}}"
 
 
-def install(target_dir: str = ".", force: bool = False) -> int:
+def install(target_dir: str = ".", force: bool = False, memory: bool = False) -> int:
     target = Path(target_dir).resolve()
     assert_not_source(target)
 
@@ -81,6 +81,13 @@ def install(target_dir: str = ".", force: bool = False) -> int:
     # Initial population of PROJECT.llm + CONTEXT.llm so the project has
     # something to inject the moment a Claude Code session opens.
     _run_engine_update(target)
+
+    # Opt-in (--memory / CCB_MEMORY=1): scaffold the iterative-research
+    # memory structure. Not default — INDEX.md/AGENTS.md are project-owned
+    # files with session-injection side effects, so creating them must be
+    # an explicit choice.
+    if memory:
+        _run_engine_script(target, claude_dir / "ccb-engine" / "memory.py", ["init"])
 
     print(f"\nccb {ccb.__version__} installed in {target}")
     return 0

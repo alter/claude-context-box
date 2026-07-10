@@ -30,7 +30,8 @@ Two optional follow-ups:
 
 ```bash
 .claude/bin/ccb memory init   # iterative-research memory: INDEX.md, validation
-                              # protocol, experiment folders (see "Memory structure")
+                              # protocol, experiment folders (see "Memory structure").
+                              # Or opt in at install time: CCB_MEMORY=1 curl ... | python3 -
 .claude/bin/ccb update        # manual context refresh — only needed after mass
                               # changes made OUTSIDE Claude Code (git pull, codegen);
                               # the install already populated everything, and hooks
@@ -348,6 +349,7 @@ Opt out of the synchronous SessionStart refresh on huge repos:
 | `CCB_REF` | `main` | Git branch / tag / commit to install |
 | `CCB_FORCE` | `0` | Recreate `.claude/ccb-venv/` from scratch |
 | `CCB_LLM` | `0` | Also install `ccb[llm]` for LLM session summaries |
+| `CCB_MEMORY` | `0` | Also scaffold the memory/ research structure (`ccb memory init`) |
 | `CCB_LLM_MODEL` | `claude-haiku-4-5` | Override the model used by Phase F + wiki |
 | `CCB_REPO_URL` | `https://github.com/alter/claude-context-box.git` | Alternate source (forks, mirrors) |
 | `CCB_TARBALL_URL` | `https://codeload.github.com/alter/claude-context-box/tar.gz/refs/heads` | Tarball fallback if git unavailable |

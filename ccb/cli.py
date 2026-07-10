@@ -12,6 +12,11 @@ def main(argv: list[str] | None = None) -> int:
     p_install = sub.add_parser("install", help="Install ccb into target project")
     p_install.add_argument("--dir", default=".", help="Target project directory")
     p_install.add_argument("--force", action="store_true")
+    p_install.add_argument(
+        "--memory",
+        action="store_true",
+        help="Also scaffold the memory/ research structure (same as `ccb memory init`)",
+    )
 
     sub.add_parser("status", help="Show ccb installation status in current project")
     sub.add_parser("update", help="Re-run install in current directory (idempotent)")
@@ -58,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "install":
         from ccb.installer.main import install
-        return install(target_dir=args.dir, force=args.force)
+        return install(target_dir=args.dir, force=args.force, memory=args.memory)
     if args.cmd == "status":
         from ccb.installer.main import status
         return status()

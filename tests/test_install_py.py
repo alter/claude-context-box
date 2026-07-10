@@ -235,3 +235,26 @@ def test_fetch_falls_back_to_tarball_when_git_clone_fails(tmp_path: Path, instal
                     "main", tmp_path, "https://example.com/x.git", "https://example.com/tar"
                 )
     assert (result / "marker.txt").read_text() == "from-tar"
+
+
+# _run_ccb_install memory flag --------------------------------------------
+
+
+def test_run_ccb_install_passes_memory_flag(tmp_path: Path, install_module, monkeypatch) -> None:
+    captured = {}
+    monkeypatch.setattr(
+        install_module.subprocess, "call", lambda args: captured.setdefault("args", args) and 0 or 0
+    )
+    install_module._run_ccb_install(tmp_path / "py", tmp_path, force=False, memory=True)
+    assert "--memory" in captured["args"]
+    assert "--force" not in captured["args"]
+
+
+def test_run_ccb_install_omits_memory_by_default(tmp_path: Path, install_module, monkeypatch) -> None:
+    captured = {}
+    monkeypatch.setattr(
+        install_module.subprocess, "call", lambda args: captured.setdefault("args", args) and 0 or 0
+    )
+    install_module._run_ccb_install(tmp_path / "py", tmp_path, force=True)
+    assert "--memory" not in captured["args"]
+    assert "--force" in captured["args"]

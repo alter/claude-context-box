@@ -17,13 +17,19 @@ def test_install_dispatches_to_installer_install() -> None:
     with patch("ccb.installer.main.install", return_value=0) as mock:
         rc = main(["install", "--dir", "/tmp/x"])
     assert rc == 0
-    mock.assert_called_once_with(target_dir="/tmp/x", force=False)
+    mock.assert_called_once_with(target_dir="/tmp/x", force=False, memory=False)
 
 
 def test_install_with_force() -> None:
     with patch("ccb.installer.main.install", return_value=0) as mock:
         main(["install", "--dir", "/tmp/x", "--force"])
-    mock.assert_called_once_with(target_dir="/tmp/x", force=True)
+    mock.assert_called_once_with(target_dir="/tmp/x", force=True, memory=False)
+
+
+def test_install_with_memory() -> None:
+    with patch("ccb.installer.main.install", return_value=0) as mock:
+        main(["install", "--dir", "/tmp/x", "--memory"])
+    mock.assert_called_once_with(target_dir="/tmp/x", force=False, memory=True)
 
 
 def test_status_dispatches_to_installer_status() -> None:
