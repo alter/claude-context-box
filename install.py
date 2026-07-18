@@ -130,17 +130,38 @@ def _setup_venv(target_dir: Path, *, force: bool) -> Path:
         print(f"  removing existing venv: {venv_dir}")
         shutil.rmtree(venv_dir)
 
+    if venv_python.exists() and not _venv_has_pip(venv_python):
+        # Leftover of an earlier failed run (venv created, pip bootstrap died).
+        print(f"  existing venv has no pip; recreating: {venv_dir}")
+        shutil.rmtree(venv_dir)
+
     if not venv_python.exists():
         print(f"  creating venv: {venv_dir}")
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         rc = subprocess.call([sys.executable, "-m", "venv", str(venv_dir)])
         if rc != 0:
-            sys.stderr.write("failed to create venv\n")
+            shutil.rmtree(venv_dir, ignore_errors=True)
+            sys.stderr.write(
+                "failed to create venv (see the error above).\n"
+                f"interpreter used: {sys.executable}\n"
+                "If this interpreter is broken (e.g. ensurepip fails), retry with\n"
+                "another Python version, e.g.:\n"
+                "  curl -sSL https://raw.githubusercontent.com/"
+                f"{GITHUB_REPO}/main/install.py | python3.13 -\n"
+            )
             sys.exit(1)
     else:
         print(f"  reusing existing venv: {venv_dir}")
 
     return venv_python
+
+
+def _venv_has_pip(venv_python: Path) -> bool:
+    return subprocess.call(
+        [str(venv_python), "-m", "pip", "--version"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ) == 0
 
 
 def _venv_python_path(venv_dir: Path) -> Path:
@@ -159,7 +180,12 @@ def _pip_install_ccb(venv_python: Path, source_root: Path) -> None:
                "--upgrade", "--disable-pip-version-check", spec]
     proc = subprocess.run(pip_cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        sys.stderr.write(f"pip install failed:\n{proc.stderr}\n")
+        sys.stderr.write(
+            f"pip install failed:\n{proc.stderr}\n"
+            "If the venv is broken, recreate it from scratch:\n"
+            "  curl -sSL https://raw.githubusercontent.com/"
+            f"{GITHUB_REPO}/main/install.py | CCB_FORCE=1 python3 -\n"
+        )
         sys.exit(1)
 
 
