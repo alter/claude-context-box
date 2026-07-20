@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Literal
 
 DEFAULT_MODEL = "claude-haiku-4-5"
@@ -129,7 +130,17 @@ def _via_cli(prompt: str, *, model: str, timeout: int) -> str | None:
     cmd = ["claude", "-p", prompt, "--model", model]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            # Run OUTSIDE the project: with the project as cwd, this headless
+            # session would load the project's own ccb hooks, whose SessionEnd
+            # spawns another summarizer → endless claude-spawning chain.
+            cwd=tempfile.gettempdir(),
+            # Second line of defense: hooks skip themselves when this is set.
+            env={**os.environ, "CCB_INVOKED_BY": os.environ.get("CCB_INVOKED_BY") or "ccb-llm"},
         )
     except (subprocess.TimeoutExpired, OSError):
         return None

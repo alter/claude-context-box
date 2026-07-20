@@ -39,6 +39,11 @@ MEMORY_FILE_MAX_CHARS = 8000
 
 def run() -> None:
     read_input()
+    if os.environ.get("CCB_INVOKED_BY"):
+        # ccb-spawned headless claude run (background summarizer) — don't
+        # refresh contexts or inject them; the summarizer only needs its prompt.
+        write_output({})
+        return
     root = project_root()
 
     _refresh_if_stale(root)
@@ -68,9 +73,14 @@ def run() -> None:
         logs = sorted(daily_dir.glob("*.md"))
         if logs:
             latest = logs[-1]
-            parts.append(
-                f"### last session log: {latest.name}\n\n{latest.read_text(encoding='utf-8').strip()}"
-            )
+            log_text = latest.read_text(encoding="utf-8").strip()
+            if len(log_text) > MEMORY_FILE_MAX_CHARS:
+                # Keep the tail — the most recent entries matter most.
+                log_text = (
+                    "…(truncated — Read the file for the rest)\n"
+                    + log_text[-MEMORY_FILE_MAX_CHARS:]
+                )
+            parts.append(f"### last session log: {latest.name}\n\n{log_text}")
 
     if not parts:
         write_output({})

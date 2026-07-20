@@ -33,6 +33,13 @@ from _lib import (  # noqa: E402
 
 
 def run() -> None:
+    if os.environ.get("CCB_INVOKED_BY"):
+        # We're inside a ccb-spawned headless claude run (the background
+        # worker's LLM summarizer). Spawning another worker here would chain
+        # sessions forever: worker → claude -p → SessionEnd → worker → ...
+        read_input()
+        write_output({})
+        return
     payload = read_input()
     root = project_root()
     state = read_state(root)
