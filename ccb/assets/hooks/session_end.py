@@ -43,7 +43,11 @@ def run() -> None:
     payload = read_input()
     root = project_root()
     state = read_state(root)
-    changed = sorted(set(state.get("changed_files", [])))
+    # Union of the append-only jsonl (current format) and state.json
+    # (pre-0.8.4 format, drained for back-compat during upgrades).
+    changed = sorted(
+        _drain_changed_files(root) | set(state.get("changed_files", []))
+    )
 
     git_changes = _git_short_status(root)
     transcript = payload.get("transcript_path") or ""
@@ -87,6 +91,30 @@ def run() -> None:
     _spawn_background_worker(root, handoff)
 
     write_output({})
+
+
+def _drain_changed_files(root: Path) -> set[str]:
+    """Read and remove .ccb/changed_files.jsonl written by the PostToolUse hook."""
+    import json as _json
+    log = root / ".ccb" / "changed_files.jsonl"
+    if not log.exists():
+        return set()
+    paths: set[str] = set()
+    try:
+        for line in log.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rel = _json.loads(line).get("path")
+            except Exception:
+                continue
+            if rel:
+                paths.add(rel)
+        log.unlink()
+    except OSError:
+        pass
+    return paths
 
 
 def _spawn_background_worker(root: Path, handoff: Path) -> None:

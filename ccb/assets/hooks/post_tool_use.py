@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """PostToolUse hook: record which files Claude touched, for incremental updates.
 
-Edits and writes accumulate in `.ccb/state.json`; the SessionEnd hook drains
-them when the session closes. This keeps context regeneration cheap during the
-session and incremental afterwards.
+Edits and writes accumulate in `.ccb/changed_files.jsonl` (append-only — this
+hook runs on EVERY edit, so it must not read-modify-rewrite anything); the
+SessionEnd hook drains and dedups the file when the session closes. This keeps
+context regeneration cheap during the session and incremental afterwards.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import project_root, read_input, read_state, safe_main, write_output, write_state  # noqa: E402
+from _lib import ccb_dir, project_root, read_input, safe_main, write_output  # noqa: E402
 
 WATCHED_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
@@ -32,11 +34,10 @@ def run() -> None:
     root = project_root()
     rel = _to_relative(file_path, root)
 
-    state = read_state(root)
-    changed = set(state.get("changed_files", []))
-    changed.add(rel)
-    state["changed_files"] = sorted(changed)
-    write_state(state, root)
+    log = ccb_dir(root) / "changed_files.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"path": rel}) + "\n")
 
     write_output({})
 

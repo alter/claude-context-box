@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-context-box"
-version = "0.8.3"
+dynamic = ["version"]
 description = "Self-maintaining context system for Claude Code projects"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,6 +36,9 @@ ccb = "ccb.cli:main"
 [project.urls]
 Homepage = "https://github.com/alter/claude-context-box"
 Issues = "https://github.com/alter/claude-context-box/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "ccb.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["."]

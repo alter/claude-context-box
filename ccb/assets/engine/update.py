@@ -118,8 +118,8 @@ def write_project_llm(root: Path) -> None:
         lines.append("  # populated as modules grow")
 
     target = root / "PROJECT.llm"
-    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"  wrote {relative(target, root)}")
+    if _write_if_changed(target, "\n".join(lines) + "\n"):
+        print(f"  wrote {relative(target, root)}")
 
 
 def write_context_llm(directory: Path, root: Path) -> None:
@@ -174,7 +174,36 @@ def write_context_llm(directory: Path, root: Path) -> None:
                 lines.append(f"  {imp}")
 
     target = directory / "CONTEXT.llm"
-    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_if_changed(target, "\n".join(lines) + "\n")
+
+
+def _write_if_changed(target: Path, text: str) -> bool:
+    """Write only when content differs, ignoring volatile timestamp lines.
+
+    Unconditional rewrites poke file watchers (dev servers, --watch test
+    runners) in the source dirs after every session, and `@updated` alone
+    would make the content always differ. Skipping the write also makes
+    `@updated` mean "last real change", which is the useful reading.
+    """
+    if target.exists():
+        try:
+            old = target.read_text(encoding="utf-8")
+        except OSError:
+            old = None
+        if old is not None and _stable_lines(old) == _stable_lines(text):
+            return False
+    target.write_text(text, encoding="utf-8")
+    return True
+
+
+_VOLATILE_PREFIXES = ("@updated:", "**Updated:**")
+
+
+def _stable_lines(text: str) -> list[str]:
+    return [
+        line for line in text.splitlines()
+        if not line.strip().startswith(_VOLATILE_PREFIXES)
+    ]
 
 
 # INDEX.md auto-maintained block ------------------------------------------
@@ -213,7 +242,7 @@ def refresh_index_block(root: Path) -> None:
     else:
         new_text = text.rstrip("\n") + "\n\n" + block + "\n"
 
-    if new_text != text:
+    if _stable_lines(new_text) != _stable_lines(text):
         index.write_text(new_text, encoding="utf-8")
         print(f"  refreshed {relative(index, root)} fact block")
 

@@ -36,6 +36,11 @@ from _llm import call_llm, parse_json_response  # noqa: E402
 TRANSCRIPT_BYTES_LIMIT = 60_000
 LLM_TIMEOUT_SECONDS = 30
 
+# Don't burn an LLM call on trivial sessions: no files changed AND the
+# transcript is tiny (opened, poked around, left). ~20KB of session JSONL is
+# roughly a handful of turns.
+SUMMARY_MIN_TRANSCRIPT_BYTES = 20_000
+
 
 def main() -> int:
     handoff_path = Path(sys.argv[1]) if len(sys.argv) > 1 else None
@@ -56,7 +61,7 @@ def main() -> int:
     transcript: str = payload.get("transcript") or ""
 
     refreshed = _refresh_contexts(root, changed)
-    summary = _llm_summary(transcript)
+    summary = _llm_summary(transcript, changed)
 
     log_dir = root / ".ccb" / "daily_log"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -106,12 +111,13 @@ def _refresh_contexts(root: Path, changed_files: list[str]) -> list[str]:
 # ---- LLM summary -------------------------------------------------------------
 
 
-def _llm_summary(transcript_path: str) -> dict | None:
+def _llm_summary(transcript_path: str, changed: list[str]) -> dict | None:
     """Best-effort transcript summarization via Haiku.
 
     Returns a dict with keys 'summary', 'decisions', 'issues' on success.
     Returns None if anything blocks the call (no LLM backend reachable,
-    no transcript, network error, malformed JSON).
+    no transcript, network error, malformed JSON) — or if the session is
+    trivial (no changed files and a short transcript).
 
     Override the model with CCB_LLM_MODEL; disable entirely with CCB_LLM=0.
     """
@@ -122,6 +128,12 @@ def _llm_summary(transcript_path: str) -> dict | None:
 
     transcript_file = Path(transcript_path)
     if not transcript_file.exists():
+        return None
+    try:
+        size = transcript_file.stat().st_size
+    except OSError:
+        return None
+    if not changed and size < SUMMARY_MIN_TRANSCRIPT_BYTES:
         return None
 
     try:
