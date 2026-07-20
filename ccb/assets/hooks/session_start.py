@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from _lib import ccb_dir, project_root, read_input, safe_main, write_output  # noqa: E402
 
 UPDATE_TIMEOUT_SECONDS = 30
+WALK_BUDGET_SECONDS = 2.0
 
 # Memory-structure files (scaffolded by /ccb-memory init). Injected in this
 # order — INDEX.md is the declared entry point, so it goes first.
@@ -101,18 +102,26 @@ def run() -> None:
 
 
 def _refresh_if_stale(root: Path) -> None:
-    """Run update.py synchronously if PROJECT.llm doesn't reflect the source tree."""
+    """Run update.py synchronously if PROJECT.llm doesn't reflect the source tree.
+
+    OFF by default: it only guards against edits made OUTSIDE Claude Code
+    between sessions (another editor, git pull, another machine), while its
+    cost — a full tree walk plus a possible synchronous update — is paid on
+    every session start by everyone. Changes made inside sessions are already
+    tracked by the PostToolUse hook and refreshed at session end.
+
+    Enable via `"ccb": {"auto_refresh": true}` in .claude/settings.json
+    (`ccb install --auto-refresh` sets it) or the CCB_AUTO_REFRESH=1 env var.
+    """
+    if not _auto_refresh_enabled(root):
+        return
+
     update_script = root / ".claude" / "ccb-engine" / "update.py"
     if not update_script.exists():
         return
 
     project_llm = root / "PROJECT.llm"
     if project_llm.exists() and not _is_stale(project_llm, root):
-        return
-
-    # Allow the user to disable the auto-refresh entirely (e.g. on huge repos
-    # where the latency is unwelcome).
-    if os.environ.get("CCB_DISABLE_AUTO_UPDATE", "").lower() in {"1", "true", "yes"}:
         return
 
     try:
@@ -128,13 +137,43 @@ def _refresh_if_stale(root: Path) -> None:
         pass
 
 
+def _auto_refresh_enabled(root: Path) -> bool:
+    """Session-start refresh is opt-in; see _refresh_if_stale docstring.
+
+    Precedence: CCB_DISABLE_AUTO_UPDATE=1 (hard off, kept for back-compat)
+    > CCB_AUTO_REFRESH env > settings.json "ccb": {"auto_refresh": ...}
+    > default False.
+    """
+    if os.environ.get("CCB_DISABLE_AUTO_UPDATE", "").lower() in {"1", "true", "yes"}:
+        return False
+    env = os.environ.get("CCB_AUTO_REFRESH", "").lower()
+    if env in {"1", "true", "yes"}:
+        return True
+    if env in {"0", "false", "no"}:
+        return False
+    import json
+    settings = root / ".claude" / "settings.json"
+    try:
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        return bool(data.get("ccb", {}).get("auto_refresh", False))
+    except Exception:
+        return False
+
+
 def _is_stale(project_llm: Path, root: Path) -> bool:
     """True if any tracked source file is newer than PROJECT.llm.
 
     Uses os.walk with onerror so unreadable subtrees (data dirs owned by
     root, fuse mounts that are down, etc.) are skipped, not raised.
+
+    The walk is time-bounded: on slow filesystems (WSL /mnt/c, network
+    mounts) an unbounded walk can outlive the hook timeout, so Claude Code
+    kills the hook mid-run. Past the budget we assume fresh — a fast session
+    start with possibly stale context beats a cancelled hook.
     """
     import os
+    import time
+    deadline = time.monotonic() + WALK_BUDGET_SECONDS
     try:
         cutoff = project_llm.stat().st_mtime
     except OSError:
@@ -143,6 +182,8 @@ def _is_stale(project_llm: Path, root: Path) -> bool:
             "dist", "build", ".eggs", ".local", ".ccb", ".claude"}
     suffixes = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs")
     for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
+        if time.monotonic() > deadline:
+            return False
         dirnames[:] = [d for d in dirnames if d not in skip and not d.startswith(".")]
         for name in filenames:
             if name.endswith(suffixes):

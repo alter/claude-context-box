@@ -17,6 +17,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also scaffold the memory/ research structure (same as `ccb memory init`)",
     )
+    p_install.add_argument(
+        "--auto-refresh",
+        action="store_true",
+        default=None,
+        help="Refresh stale contexts synchronously at session start (catches edits "
+             "made outside Claude Code; costs a tree scan on every session open). "
+             "Off by default; toggle later via \"ccb\": {\"auto_refresh\": true} "
+             "in .claude/settings.json",
+    )
 
     sub.add_parser("status", help="Show ccb installation status in current project")
     sub.add_parser("update", help="Re-run install in current directory (idempotent)")
@@ -67,7 +76,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "install":
         from ccb.installer.main import install
-        return install(target_dir=args.dir, force=args.force, memory=args.memory)
+        return install(
+            target_dir=args.dir,
+            force=args.force,
+            memory=args.memory,
+            auto_refresh=args.auto_refresh,
+        )
     if args.cmd == "status":
         from ccb.installer.main import status
         return status()

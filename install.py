@@ -24,6 +24,10 @@ Environment variables:
     CCB_LLM          if set to 1, also install ccb[llm] for LLM session summaries
     CCB_MEMORY       if set to 1, also scaffold the memory/ research structure
                      (INDEX.md, validation protocol, experiment folders)
+    CCB_AUTO_REFRESH if set to 1, refresh stale contexts synchronously at
+                     session start (off by default; catches edits made
+                     outside Claude Code at the cost of a tree scan on
+                     every session open)
 """
 from __future__ import annotations
 
@@ -200,6 +204,8 @@ def _run_ccb_install(
         args.append("--force")
     if memory:
         args.append("--memory")
+    if os.environ.get("CCB_AUTO_REFRESH", "").lower() in {"1", "true", "yes"}:
+        args.append("--auto-refresh")
     return subprocess.call(args)
 
 

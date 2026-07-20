@@ -33,7 +33,12 @@ ENGINE_DIR = ASSETS_ROOT / "engine"
 PYTHON_PLACEHOLDER = "{{ccb_python}}"
 
 
-def install(target_dir: str = ".", force: bool = False, memory: bool = False) -> int:
+def install(
+    target_dir: str = ".",
+    force: bool = False,
+    memory: bool = False,
+    auto_refresh: bool | None = None,
+) -> int:
     target = Path(target_dir).resolve()
     assert_not_source(target)
 
@@ -64,6 +69,15 @@ def install(target_dir: str = ".", force: bool = False, memory: bool = False) ->
             PYTHON_PLACEHOLDER, python_token
         )
         ccb_settings = json.loads(raw)
+        ccb_settings["ccb"]["version"] = ccb.__version__
+        # --auto-refresh wins; otherwise a reinstall keeps the project's prior
+        # choice (the merger replaces the "ccb" block wholesale).
+        if auto_refresh is not None:
+            ccb_settings["ccb"]["auto_refresh"] = auto_refresh
+        else:
+            prior = _prior_auto_refresh(claude_dir / "settings.json")
+            if prior is not None:
+                ccb_settings["ccb"]["auto_refresh"] = prior
         outcome = merge_settings_json(claude_dir / "settings.json", ccb_settings)
         print(f".claude/settings.json: {outcome}")
 
@@ -91,6 +105,17 @@ def install(target_dir: str = ".", force: bool = False, memory: bool = False) ->
 
     print(f"\nccb {ccb.__version__} installed in {target}")
     return 0
+
+
+def _prior_auto_refresh(settings_path: Path) -> bool | None:
+    if not settings_path.exists():
+        return None
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        value = data.get("ccb", {}).get("auto_refresh")
+        return bool(value) if value is not None else None
+    except Exception:
+        return None
 
 
 DEFAULT_UPDATE_TIMEOUT = 120

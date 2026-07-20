@@ -71,10 +71,22 @@ def read_input() -> dict[str, Any]:
 
 
 def write_output(payload: dict[str, Any]) -> None:
-    """Emit a JSON response on stdout."""
-    json.dump(payload, sys.stdout, ensure_ascii=False)
-    sys.stdout.write("\n")
-    sys.stdout.flush()
+    """Emit a JSON response on stdout.
+
+    BrokenPipeError means Claude Code already gave up on this hook (timeout /
+    session teardown) and closed the pipe — nothing useful left to do.
+    """
+    try:
+        json.dump(payload, sys.stdout, ensure_ascii=False)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # Re-point stdout at /dev/null so the interpreter's exit-time flush
+        # doesn't print "Exception ignored on flushing sys.stdout" to stderr.
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
 
 
 def log_error(label: str, exc: BaseException, root: Path | None = None) -> None:
@@ -93,6 +105,10 @@ def safe_main(label: str, fn) -> None:
         fn()
     except SystemExit:
         raise
+    except (KeyboardInterrupt, BrokenPipeError):
+        # Claude Code cancelled the hook (timeout / session teardown). This is
+        # normal operation, not a hook bug — don't pollute errors.log with it.
+        sys.exit(0)
     except BaseException as exc:  # noqa: BLE001
         log_error(label, exc)
         # Always exit 0 — a failed hook must not block Claude Code.

@@ -1,7 +1,8 @@
 {
   "ccb": {
     "version": "0.8.0",
-    "managed": true
+    "managed": true,
+    "auto_refresh": false
   },
   "hooks": {
     "SessionStart": [
